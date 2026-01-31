@@ -1,0 +1,9 @@
+
+{
+  "name": "SmartBed Health Pro",
+  "description": "A comprehensive healthcare monitoring application for smart beds, featuring real-time vitals tracking, alert management, caregiver coordination, and BLE device control.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
