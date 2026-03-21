@@ -8,27 +8,19 @@ interface DashboardProps {
   onToggleStatus: () => void;
 }
 
-type BedAction = "head_up" | "head_down" | "flat" | "memory";
-
 const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const isDisconnected = status === "disconnected";
 
-  // realtime + safety
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
   const [safety, setSafety] = useState<SafetyState>("normal");
   const [lastUpdateMs, setLastUpdateMs] = useState<number>(0);
-
-  // optional status info (battery/rssi/stale)
   const [staleBackend, setStaleBackend] = useState(false);
 
   const isStaleLocal = !lastUpdateMs || Date.now() - lastUpdateMs > 30_000;
   const isStale = staleBackend || isStaleLocal;
-
-  // backend-enforced lock
   const isCritical = safety === "locked";
 
   useEffect(() => {
-    // initial status pull (optional)
     getStatus()
       .then((s) => {
         setStaleBackend(!!s?.stale);
@@ -36,7 +28,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
       })
       .catch(() => {});
 
-    // realtime stream
     const cleanup = connectStream((m, safetyState) => {
       setMetrics(m);
       setLastUpdateMs(Date.now());
@@ -47,12 +38,22 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
     return cleanup;
   }, []);
 
-  async function handleBed(action: BedAction) {
+  async function handleBedStartUp() {
     try {
-      await bedAction(action);
-    } catch {
-      // keep silent for now; you can show toast later
-    }
+      await bedAction("start-up");
+    } catch {}
+  }
+
+  async function handleBedStartDown() {
+    try {
+      await bedAction("start-down");
+    } catch {}
+  }
+
+  async function handleBedStop() {
+    try {
+      await bedAction("stop");
+    } catch {}
   }
 
   const VitalItem = ({ icon, label, value, unit, color }: any) => (
@@ -113,7 +114,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
           )}
 
           <div className="flex justify-between items-center mb-4">
-            <p className="text-xs font-black text-gray-800 dark:text-gray-300 uppercase tracking-[0.2em]">Bed Control</p>
+            <p className="text-xs font-black text-gray-800 dark:text-gray-300 uppercase tracking-[0.2em]">
+              Bed Control
+            </p>
             <div className="bg-success text-white px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">
               {isCritical ? "LOCKED" : isDisconnected || isStale ? "OFFLINE" : "STABLE"}
             </div>
@@ -122,22 +125,35 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
           <div className="grid grid-cols-4 gap-3">
             <button
               disabled={isCritical || isDisconnected || isStale}
-              onClick={() => handleBed("head_up")}
+              onMouseDown={handleBedStartUp}
+              onMouseUp={handleBedStop}
+              onMouseLeave={handleBedStop}
+              onTouchStart={handleBedStartUp}
+              onTouchEnd={handleBedStop}
               className="aspect-square rounded-2xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
             >
-              <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">keyboard_arrow_up</span>
+              <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">
+                keyboard_arrow_up
+              </span>
             </button>
+
             <button
               disabled={isCritical || isDisconnected || isStale}
-              onClick={() => handleBed("head_down")}
+              onMouseDown={handleBedStartDown}
+              onMouseUp={handleBedStop}
+              onMouseLeave={handleBedStop}
+              onTouchStart={handleBedStartDown}
+              onTouchEnd={handleBedStop}
               className="aspect-square rounded-2xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
             >
-              <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">keyboard_arrow_down</span>
+              <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">
+                keyboard_arrow_down
+              </span>
             </button>
+
             <button
-              disabled={isCritical || isDisconnected || isStale}
-              onClick={() => handleBed("flat")}
-              className="col-span-2 h-full bg-primary text-white rounded-2xl font-black text-sm active:scale-95 disabled:opacity-20 shadow-md"
+              disabled
+              className="col-span-2 h-full bg-gray-300 text-white rounded-2xl font-black text-sm opacity-50 cursor-not-allowed"
             >
               FLAT
             </button>

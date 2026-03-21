@@ -1,9 +1,15 @@
-export async function bedAction(action: "head_up" | "head_down" | "flat" | "memory") {
-  const res = await fetch(`/api/bed/${action}`, { method: "POST" });
+export type BedAction = "start-up" | "start-down" | "stop" | "flat";
+
+export async function bedAction(action: BedAction) {
+  const res = await fetch(`/api/bed/${action}`, {
+    method: "POST",
+  });
+
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data?.error || `Request failed (${res.status})`);
   }
+
   return res.json().catch(() => ({ ok: true }));
 }
 
@@ -20,7 +26,7 @@ export type AlertItem = {
   message?: string;
   ts?: string;
   emailStatus?: "sent" | "failed" | "pending" | "not_set";
-  state?: "active" | "resolved"; // optional (backend may not have yet)
+  state?: "active" | "resolved";
 };
 
 export async function getAlerts() {
@@ -68,10 +74,12 @@ export async function addCaregiver(payload: { name: string; email: string }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data?.error || `Add caregiver failed (${res.status})`);
   }
+
   return await res.json();
 }
 
