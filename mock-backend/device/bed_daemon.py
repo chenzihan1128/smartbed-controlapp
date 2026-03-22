@@ -3,23 +3,23 @@ import sys
 import signal
 from gpiozero import OutputDevice
 
-# 继电器高电平触发
-RELAY_UP = OutputDevice(17, active_high=True, initial_value=False)
-RELAY_DOWN = OutputDevice(27, active_high=True, initial_value=False)
+# 继电器低电平触发（按你的测试代码）
+RELAY_UP = OutputDevice(17, active_high=False, initial_value=True)
+RELAY_DOWN = OutputDevice(27, active_high=False, initial_value=True)
 
 def all_release():
-    # 高电平触发时，off() 才是释放
-    RELAY_UP.off()
-    RELAY_DOWN.off()
+    # 低电平触发时，on() = 释放
+    RELAY_UP.on()
+    RELAY_DOWN.on()
 
 def start_up():
     all_release()
-    RELAY_UP.on()
+    RELAY_UP.off()   # 低电平触发 -> 吸合
     print("OK start-up", flush=True)
 
 def start_down():
     all_release()
-    RELAY_DOWN.on()
+    RELAY_DOWN.off()  # 低电平触发 -> 吸合
     print("OK start-down", flush=True)
 
 def stop_bed():
@@ -43,10 +43,12 @@ def cleanup():
         pass
 
 def handle_exit(signum, frame):
-    stop_bed()
-    print("OK exit", flush=True)
-    cleanup()
-    sys.exit(0)
+    try:
+        stop_bed()
+        print("OK exit", flush=True)
+    finally:
+        cleanup()
+        sys.exit(0)
 
 def main():
     signal.signal(signal.SIGINT, handle_exit)
