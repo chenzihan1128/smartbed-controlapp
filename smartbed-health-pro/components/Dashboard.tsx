@@ -93,7 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
       : "Ready";
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-140px)] md:min-h-[calc(100vh-156px)] overflow-hidden bg-background-light dark:bg-background-dark">
+    <div className="flex flex-col min-h-[calc(100vh-140px)] overflow-hidden bg-background-light dark:bg-background-dark">
       <header
         onClick={onToggleStatus}
         className={`flex items-center justify-between px-5 py-4 md:px-6 md:py-5 cursor-pointer shadow-sm z-20 ${
@@ -113,8 +113,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-4 px-4 py-3 md:px-6 md:py-5">
-        <section className="md:w-[56%] flex flex-col gap-4">
+      <div className="flex-1 flex flex-col min-[700px]:flex-row gap-4 px-4 py-3 md:px-6 md:py-5">
+        <section className="min-[700px]:flex-[1.15] flex flex-col gap-4">
           <div className="bg-white dark:bg-gray-900 rounded-[28px] border border-gray-100 dark:border-gray-800 shadow-md p-4 md:p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -146,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
           )}
         </section>
 
-        <section className="md:w-[44%]">
+        <section className="min-[700px]:flex-1">
           <div className="h-full bg-white dark:bg-gray-900 rounded-[28px] p-5 md:p-6 shadow-md border border-gray-100 dark:border-gray-800 relative flex flex-col">
           {isCritical && (
             <div className="absolute inset-0 bg-red-600/10 backdrop-blur-[1px] rounded-[28px] flex items-center justify-center z-10 border-2 border-red-500">
@@ -179,7 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
               onMouseLeave={handleBedStop}
               onTouchStart={handleBedStartUp}
               onTouchEnd={handleBedStop}
-              className="min-h-28 md:min-h-36 rounded-[24px] bg-gray-200 dark:bg-gray-800 flex flex-col items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
+              className="min-h-28 min-[700px]:min-h-40 rounded-[24px] bg-gray-200 dark:bg-gray-800 flex flex-col items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
             >
               <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">
                 keyboard_arrow_up
@@ -196,7 +196,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
               onMouseLeave={handleBedStop}
               onTouchStart={handleBedStartDown}
               onTouchEnd={handleBedStop}
-              className="min-h-28 md:min-h-36 rounded-[24px] bg-gray-200 dark:bg-gray-800 flex flex-col items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
+              className="min-h-28 min-[700px]:min-h-40 rounded-[24px] bg-gray-200 dark:bg-gray-800 flex flex-col items-center justify-center active:scale-90 disabled:opacity-20 border border-gray-300 dark:border-gray-700"
             >
               <span className="material-symbols-outlined text-3xl text-gray-900 dark:text-white">
                 keyboard_arrow_down
@@ -209,7 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
             <button
               disabled={isCritical || isDisconnected || isStale}
               onClick={handleBedFlat}
-              className="col-span-2 min-h-20 md:min-h-24 bg-primary text-white rounded-[24px] font-black text-base md:text-lg active:scale-[0.98] disabled:opacity-20 border border-primary/30 tracking-[0.2em] uppercase"
+              className="col-span-2 min-h-20 min-[700px]:min-h-24 bg-primary text-white rounded-[24px] font-black text-base md:text-lg active:scale-[0.98] disabled:opacity-20 border border-primary/30 tracking-[0.2em] uppercase"
             >
               FLAT
             </button>
