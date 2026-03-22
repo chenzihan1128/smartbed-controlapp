@@ -30,10 +30,10 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen bg-white dark:bg-background-dark shadow-2xl flex flex-col relative overflow-hidden">
+    <div className="w-full max-w-[480px] md:max-w-[960px] mx-auto min-h-screen bg-white dark:bg-background-dark shadow-2xl flex flex-col relative overflow-hidden md:rounded-[28px]">
       
       {/* Route Content */}
-      <main className="flex-1 pb-24 overflow-y-auto no-scrollbar">
+      <main className="flex-1 pb-24 md:pb-28 overflow-y-auto no-scrollbar">
         <Routes>
           <Route path="/" element={<Dashboard status={status} onToggleStatus={() => setStatus(s => s === 'normal' ? 'critical' : (s === 'critical' ? 'disconnected' : 'normal'))} />} />
           <Route path="/alerts" element={<AlertsList />} />
@@ -48,7 +48,7 @@ const App: React.FC = () => {
 
       {/* Persistent Bottom Nav */}
       {!hideNav && (
-        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 pb-8 pt-2 z-50">
+        <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] md:max-w-[960px] bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 pb-8 pt-2 z-50">
           <div className="flex justify-around items-end h-16 px-4">
             {navItems.map((item) => (
               item.isCenter ? (

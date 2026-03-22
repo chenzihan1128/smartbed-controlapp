@@ -17,8 +17,15 @@ export function connectStream(
   onMetrics: (m: MetricsPayload, safety?: SafetyState) => void,
   onStatus?: (state: "open" | "closed" | "error") => void
 ) {
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const url = `${protocol}://${window.location.host}/ws/stream`;
+  const url = (() => {
+    if (!import.meta.env.PROD) {
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      return `${protocol}://${window.location.host}/ws/stream`;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${protocol}://${window.location.hostname}:8000/ws/stream`;
+  })();
 
   let ws: WebSocket | null = null;
   let retryTimer: number | null = null;
