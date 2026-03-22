@@ -56,6 +56,12 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
     } catch {}
   }
 
+  async function handleBedFlat() {
+    try {
+      await bedAction("flat");
+    } catch {}
+  }
+
   const VitalItem = ({ icon, label, value, unit, color }: any) => (
     <div
       className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
@@ -152,8 +158,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
             </button>
 
             <button
-              disabled
-              className="col-span-2 h-full bg-gray-300 text-white rounded-2xl font-black text-sm opacity-50 cursor-not-allowed"
+              disabled={isCritical || isDisconnected || isStale}
+              onClick={handleBedFlat}
+              className="col-span-2 h-full bg-primary text-white rounded-2xl font-black text-sm active:scale-[0.98] disabled:opacity-20 border border-primary/30"
             >
               FLAT
             </button>

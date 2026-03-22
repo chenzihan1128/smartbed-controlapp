@@ -1,6 +1,6 @@
 import express from "express";
 import state from "../services/state.js";
-import { startUp, startDown, stopBed } from "../services/bedService.js";
+import { flatBed, startUp, startDown, stopBed } from "../services/bedService.js";
 
 const router = express.Router();
 
@@ -81,10 +81,28 @@ router.post("/stop", async (req, res) => {
 });
 
 router.post("/flat", async (req, res) => {
-  res.status(501).json({
-    ok: false,
-    error: "Flat mode not implemented yet.",
-  });
+  try {
+    if (state.safetyState === "locked") {
+      return res.status(403).json({
+        ok: false,
+        error: "Controls locked due to a critical alert.",
+      });
+    }
+
+    const output = await flatBed();
+
+    res.json({
+      ok: true,
+      action: "flat",
+      bed: state.bed,
+      output,
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
 });
 
 export default router;

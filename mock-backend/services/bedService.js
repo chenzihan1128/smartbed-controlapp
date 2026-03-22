@@ -8,17 +8,28 @@ const __dirname = path.dirname(__filename);
 
 const PYTHON = "python3";
 const SCRIPT_PATH = path.join(__dirname, "..", "device", "bed_daemon.py");
+const FLAT_MOVE_MS = Number(process.env.BED_FLAT_MOVE_MS || 10000);
 
 let bedProc = null;
 let ready = false;
 let startingPromise = null;
+let flatTimer = null;
+
+function clearFlatTimer() {
+  if (!flatTimer) return;
+  clearTimeout(flatTimer);
+  flatTimer = null;
+  state.bed.autoStopAt = null;
+}
 
 function resetBedState() {
+  clearFlatTimer();
   state.bed.state = "stop";
   state.bed.direction = null;
   state.bed.moving = false;
   state.bed.lastAction = "stop";
   state.bed.lastActionAt = new Date().toISOString();
+  state.bed.autoStopAt = null;
 }
 
 function attachProcessListeners(proc) {
@@ -121,6 +132,7 @@ export async function initBedController() {
 }
 
 export async function startUp() {
+  clearFlatTimer();
   await sendCommand("start-up");
 
   state.bed.state = "moving";
@@ -133,6 +145,7 @@ export async function startUp() {
 }
 
 export async function startDown() {
+  clearFlatTimer();
   await sendCommand("start-down");
 
   state.bed.state = "moving";
@@ -145,6 +158,7 @@ export async function startDown() {
 }
 
 export async function stopBed() {
+  clearFlatTimer();
   await sendCommand("stop");
 
   state.bed.state = "stop";
@@ -154,6 +168,39 @@ export async function stopBed() {
   state.bed.lastActionAt = new Date().toISOString();
 
   return "stop sent";
+}
+
+export async function flatBed() {
+  clearFlatTimer();
+  await sendCommand("start-down");
+
+  const now = Date.now();
+  const autoStopAt = new Date(now + FLAT_MOVE_MS).toISOString();
+
+  state.bed.state = "moving";
+  state.bed.direction = "down";
+  state.bed.moving = true;
+  state.bed.lastAction = "flat";
+  state.bed.lastActionAt = new Date(now).toISOString();
+  state.bed.autoStopAt = autoStopAt;
+
+  flatTimer = setTimeout(async () => {
+    try {
+      await sendCommand("stop");
+    } catch (err) {
+      console.error("Failed to auto-stop flat motion:", err);
+    } finally {
+      flatTimer = null;
+      state.bed.state = "stop";
+      state.bed.direction = null;
+      state.bed.moving = false;
+      state.bed.autoStopAt = null;
+      state.bed.lastAction = "stop";
+      state.bed.lastActionAt = new Date().toISOString();
+    }
+  }, FLAT_MOVE_MS);
+
+  return `flat cycle started (${FLAT_MOVE_MS}ms)`;
 }
 
 export async function shutdownBedController() {

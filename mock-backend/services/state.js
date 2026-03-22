@@ -26,8 +26,9 @@ const state = {
       state: "stop",          // stop | moving
       direction: null,        // "up" | "down" | null
       moving: false,          // true | false
-      lastAction: "stop",     // start-up | start-down | stop
+      lastAction: "stop",     // start-up | start-down | stop | flat
       lastActionAt: null,     // ISO string
+      autoStopAt: null,       // ISO string | null
     },
   
     sensor: {
