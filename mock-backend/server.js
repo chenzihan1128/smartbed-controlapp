@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 import bedRoutes from "./routes/bedRoutes.js";
 import state from "./services/state.js";
 import { initBedController, shutdownBedController } from "./services/bedService.js";
+import { sendAlertEmail, sendTestEmail } from "./services/emailService.js";
 
 const app = express();
 app.use(express.json());
@@ -84,43 +85,49 @@ app.post("/api/alerts/:id/resolve", (req, res) => {
 });
 
 app.post("/api/alerts/:id/resend", (req, res) => {
+  Promise.resolve().then(async () => {
   const item = state.alerts.find((a) => a.id === req.params.id);
   if (!item) {
     return res.status(404).json({ ok: false, error: "Alert not found" });
   }
 
-  item.emailStatus = "sent";
+  const result = await sendAlertEmail(item);
+  item.emailStatus = result.ok ? "sent" : result.reason === "no_recipients" ? "not_set" : "failed";
   item.lastEmailAt = new Date().toISOString();
 
-  console.log("RESEND ALERT EMAIL:", {
-    alertId: item.id,
-    emails: state.caregivers.map((c) => c.email),
+  res.json({
+    ok: result.ok,
+    alert: item,
+    count: result.recipients.length,
+    recipients: result.recipients,
+    reason: result.reason || null,
   });
-
-  res.json({ ok: true, alert: item, count: state.caregivers.length });
+  }).catch((err) => {
+    res.status(500).json({ ok: false, error: err.message });
+  });
 });
 
 app.post("/api/alerts/:id/emergency", (req, res) => {
+  Promise.resolve().then(async () => {
   const item = state.alerts.find((a) => a.id === req.params.id);
   if (!item) {
     return res.status(404).json({ ok: false, error: "Alert not found" });
   }
 
-  console.log("EMERGENCY BROADCAST:", {
-    alertId: item.id,
-    message: item.message,
-    caregivers: state.caregivers.map((c) => c.email),
-    emergencyEmail: state.settings.emergencyEmail || null,
-  });
-
-  item.emailStatus = "sent";
+  const result = await sendAlertEmail(item);
+  item.emailStatus = result.ok ? "sent" : result.reason === "no_recipients" ? "not_set" : "failed";
   item.lastEmergencyAt = new Date().toISOString();
 
   res.json({
-    ok: true,
+    ok: result.ok,
     alert: item,
-    caregivers: state.caregivers.length,
+    caregivers: result.recipients.length,
     emergencyEmail: state.settings.emergencyEmail || null,
+    recipients: result.recipients,
+    reason: result.reason || null,
+  });
+  }).catch((err) => {
+    res.status(500).json({ ok: false, error: err.message });
   });
 });
 
@@ -156,11 +163,17 @@ app.post("/api/caregivers", (req, res) => {
 });
 
 app.post("/api/caregivers/test-email", (req, res) => {
-  console.log("TEST EMAIL to caregivers:", state.caregivers.map((c) => c.email));
-  res.json({
-    ok: true,
-    count: state.caregivers.length,
-    ts: new Date().toISOString(),
+  Promise.resolve().then(async () => {
+    const result = await sendTestEmail();
+    res.json({
+      ok: result.ok,
+      count: result.recipients.length,
+      recipients: result.recipients,
+      ts: new Date().toISOString(),
+      reason: result.reason || null,
+    });
+  }).catch((err) => {
+    res.status(500).json({ ok: false, error: err.message });
   });
 });
 

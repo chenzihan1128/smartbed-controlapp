@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAlerts, AlertItem, resolveAlert, triggerEmergencyAlert } from "../services/api";
+import { getAlerts, AlertItem, resendAlert, resolveAlert, triggerEmergencyAlert } from "../services/api";
 
 type Filter = "active" | "all" | "resolved";
 
@@ -125,6 +125,19 @@ const AlertsList: React.FC = () => {
       navigate("/caregivers");
     } catch (e: any) {
       setError(e?.message || "Emergency action failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onRetry(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await resendAlert(id);
+      await reload();
+    } catch (e: any) {
+      setError(e?.message || "Retry failed");
     } finally {
       setBusyId(null);
     }
@@ -334,9 +347,9 @@ const AlertsList: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          // 以后接：POST /api/alerts/:id/resend
-                          alert("Retry placeholder (connect to resend endpoint later)");
+                          onRetry(alert.id);
                         }}
+                        disabled={busyId === alert.id}
                         className="text-primary text-xs font-bold flex items-center gap-1 hover:underline"
                       >
                         <span className="material-symbols-outlined text-[16px]">refresh</span>

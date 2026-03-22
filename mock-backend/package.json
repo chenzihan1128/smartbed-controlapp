@@ -3,5 +3,5 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": { "dev": "node server.js" },
-  "dependencies": { "express": "^4.19.2", "ws": "^8.17.0" }
+  "dependencies": { "express": "^4.19.2", "nodemailer": "^6.9.16", "ws": "^8.17.0" }
 }
