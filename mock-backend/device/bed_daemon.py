@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-import sys
+import os
 import signal
+import sys
+import time
+from pathlib import Path
 from gpiozero import OutputDevice
 
-# 继电器低电平触发（按你的测试代码）
-RELAY_UP = OutputDevice(17, active_high=False, initial_value=True)
-RELAY_DOWN = OutputDevice(27, active_high=False, initial_value=True)
+PID_FILE = Path("/tmp/controlapp_bed_daemon.pid")
+RELAY_UP = None
+RELAY_DOWN = None
 
 def all_release():
-    # 低电平触发时，on() = 释放
-    RELAY_UP.on()
-    RELAY_DOWN.on()
+    if RELAY_UP is not None:
+        RELAY_UP.on()
+    if RELAY_DOWN is not None:
+        RELAY_DOWN.on()
 
 def start_up():
     all_release()
@@ -32,15 +36,72 @@ def cleanup():
     except Exception:
         pass
 
+    global RELAY_UP, RELAY_DOWN
+
+    if RELAY_UP is not None:
+        try:
+            RELAY_UP.close()
+        except Exception:
+            pass
+        RELAY_UP = None
+
+    if RELAY_DOWN is not None:
+        try:
+            RELAY_DOWN.close()
+        except Exception:
+            pass
+        RELAY_DOWN = None
+
     try:
-        RELAY_UP.close()
+        if PID_FILE.exists() and PID_FILE.read_text().strip() == str(os.getpid()):
+            PID_FILE.unlink()
     except Exception:
         pass
 
+def ensure_single_instance():
+    if not PID_FILE.exists():
+        PID_FILE.write_text(str(os.getpid()))
+        return
+
     try:
-        RELAY_DOWN.close()
+        existing_pid = int(PID_FILE.read_text().strip())
     except Exception:
+        PID_FILE.unlink(missing_ok=True)
+        PID_FILE.write_text(str(os.getpid()))
+        return
+
+    if existing_pid == os.getpid():
+        PID_FILE.write_text(str(os.getpid()))
+        return
+
+    try:
+        os.kill(existing_pid, 0)
+    except ProcessLookupError:
+        PID_FILE.unlink(missing_ok=True)
+        PID_FILE.write_text(str(os.getpid()))
+        return
+
+    try:
+        os.kill(existing_pid, signal.SIGTERM)
+    except ProcessLookupError:
         pass
+
+    for _ in range(20):
+        try:
+            os.kill(existing_pid, 0)
+            time.sleep(0.1)
+        except ProcessLookupError:
+            PID_FILE.unlink(missing_ok=True)
+            PID_FILE.write_text(str(os.getpid()))
+            return
+
+    raise RuntimeError(f"Existing bed daemon still running with PID {existing_pid}")
+
+def init_gpio():
+    global RELAY_UP, RELAY_DOWN
+
+    RELAY_UP = OutputDevice(17, active_high=False, initial_value=True)
+    RELAY_DOWN = OutputDevice(27, active_high=False, initial_value=True)
 
 def handle_exit(signum, frame):
     try:
@@ -53,6 +114,9 @@ def handle_exit(signum, frame):
 def main():
     signal.signal(signal.SIGINT, handle_exit)
     signal.signal(signal.SIGTERM, handle_exit)
+
+    ensure_single_instance()
+    init_gpio()
 
     print("BED_DAEMON_READY", flush=True)
     all_release()

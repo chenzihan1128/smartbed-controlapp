@@ -13,6 +13,14 @@ let bedProc = null;
 let ready = false;
 let startingPromise = null;
 
+function resetBedState() {
+  state.bed.state = "stop";
+  state.bed.direction = null;
+  state.bed.moving = false;
+  state.bed.lastAction = "stop";
+  state.bed.lastActionAt = new Date().toISOString();
+}
+
 function attachProcessListeners(proc) {
   proc.stdout.on("data", (data) => {
     const text = data.toString();
@@ -32,12 +40,7 @@ function attachProcessListeners(proc) {
     bedProc = null;
     ready = false;
     startingPromise = null;
-
-    state.bed.state = "stop";
-    state.bed.direction = null;
-    state.bed.moving = false;
-    state.bed.lastAction = "stop";
-    state.bed.lastActionAt = new Date().toISOString();
+    resetBedState();
   });
 }
 
@@ -57,6 +60,7 @@ async function ensureDaemon() {
 
       const timeout = setTimeout(() => {
         if (!ready) {
+          proc.kill("SIGTERM");
           reject(new Error("bed daemon start timeout"));
         }
       }, 3000);
@@ -72,6 +76,8 @@ async function ensureDaemon() {
       proc.on("error", (err) => {
         clearTimeout(timeout);
         clearInterval(checkReady);
+        bedProc = null;
+        ready = false;
         reject(err);
       });
 
@@ -151,9 +157,47 @@ export async function stopBed() {
 }
 
 export async function shutdownBedController() {
-  try {
-    if (bedProc && bedProc.stdin.writable) {
-      bedProc.stdin.write("exit\n");
-    }
-  } catch {}
+  const proc = bedProc;
+  if (!proc) return;
+
+  await new Promise((resolve) => {
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      proc.off("exit", onExit);
+      resolve();
+    };
+
+    const onExit = () => {
+      clearTimeout(forceKillTimer);
+      finish();
+    };
+
+    const forceKillTimer = setTimeout(() => {
+      try {
+        proc.kill("SIGTERM");
+      } catch {}
+
+      setTimeout(finish, 500);
+    }, 1000);
+
+    proc.once("exit", onExit);
+
+    try {
+      if (proc.stdin.writable) {
+        proc.stdin.write("exit\n", (err) => {
+          if (err) {
+            clearTimeout(forceKillTimer);
+            finish();
+          }
+        });
+        return;
+      }
+    } catch {}
+
+    clearTimeout(forceKillTimer);
+    finish();
+  });
 }
