@@ -3,6 +3,7 @@ import http from "http";
 import { WebSocketServer } from "ws";
 import bedRoutes from "./routes/bedRoutes.js";
 import state from "./services/state.js";
+import { initBedController, shutdownBedController } from "./services/bedService.js";
 
 const app = express();
 app.use(express.json());
@@ -152,7 +153,6 @@ app.post("/api/caregivers/test-email", (req, res) => {
 
 app.use("/api/bed", bedRoutes);
 
-// quick testing: POST /api/dev/safety/locked
 app.post("/api/dev/safety/:state", (req, res) => {
   state.safetyState = req.params.state;
   res.json({ ok: true, safetyState: state.safetyState });
@@ -176,6 +176,26 @@ wss.on("connection", (ws) => {
   ws.on("close", () => clearInterval(t));
 });
 
-server.listen(8000, () => {
-  console.log("Backend on http://localhost:8000");
+async function start() {
+  try {
+    await initBedController();
+    server.listen(8000, () => {
+      console.log("Backend on http://localhost:8000");
+    });
+  } catch (err) {
+    console.error("Failed to start bed controller:", err);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", async () => {
+  await shutdownBedController();
+  process.exit(0);
 });
+
+process.on("SIGTERM", async () => {
+  await shutdownBedController();
+  process.exit(0);
+});
+
+start();
