@@ -176,26 +176,80 @@ wss.on("connection", (ws) => {
   ws.on("close", () => clearInterval(t));
 });
 
+let shuttingDown = false;
+
+async function cleanupAndExit(code = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  try {
+    console.log("Shutting down bed controller...");
+    await shutdownBedController();
+  } catch (err) {
+    console.error("Error during shutdownBedController():", err);
+  }
+
+  try {
+    server.close(() => {
+      process.exit(code);
+    });
+
+    setTimeout(() => {
+      process.exit(code);
+    }, 2000);
+  } catch (err) {
+    console.error("Error during server close:", err);
+    process.exit(code);
+  }
+}
+
+function listenAsync(port) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.off("listening", onListening);
+      reject(err);
+    };
+
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port);
+  });
+}
+
 async function start() {
   try {
     await initBedController();
-    server.listen(8000, () => {
-      console.log("Backend on http://localhost:8000");
-    });
+    await listenAsync(8000);
+    console.log("Backend on http://localhost:8000");
   } catch (err) {
-    console.error("Failed to start bed controller:", err);
-    process.exit(1);
+    console.error("Failed to start server:", err);
+    await cleanupAndExit(1);
   }
 }
 
 process.on("SIGINT", async () => {
-  await shutdownBedController();
-  process.exit(0);
+  console.log("Received SIGINT");
+  await cleanupAndExit(0);
 });
 
 process.on("SIGTERM", async () => {
-  await shutdownBedController();
-  process.exit(0);
+  console.log("Received SIGTERM");
+  await cleanupAndExit(0);
+});
+
+process.on("uncaughtException", async (err) => {
+  console.error("Uncaught Exception:", err);
+  await cleanupAndExit(1);
+});
+
+process.on("unhandledRejection", async (err) => {
+  console.error("Unhandled Rejection:", err);
+  await cleanupAndExit(1);
 });
 
 start();
