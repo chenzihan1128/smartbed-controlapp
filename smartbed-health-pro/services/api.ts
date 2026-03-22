@@ -46,6 +46,24 @@ export async function getAlerts() {
   return (await res.json()) as AlertItem[];
 }
 
+export async function resolveAlert(id: string) {
+  const res = await fetch(apiUrl(`/api/alerts/${id}/resolve`), { method: "POST" });
+  if (!res.ok) throw new Error(`Resolve alert failed (${res.status})`);
+  return await res.json();
+}
+
+export async function resendAlert(id: string) {
+  const res = await fetch(apiUrl(`/api/alerts/${id}/resend`), { method: "POST" });
+  if (!res.ok) throw new Error(`Resend alert failed (${res.status})`);
+  return await res.json();
+}
+
+export async function triggerEmergencyAlert(id: string) {
+  const res = await fetch(apiUrl(`/api/alerts/${id}/emergency`), { method: "POST" });
+  if (!res.ok) throw new Error(`Emergency action failed (${res.status})`);
+  return await res.json();
+}
+
 export type Settings = {
   emergencyEmail: string;
 };

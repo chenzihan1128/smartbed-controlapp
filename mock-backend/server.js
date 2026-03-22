@@ -62,53 +62,66 @@ app.get("/api/metrics/latest", (_, res) => {
 });
 
 app.get("/api/alerts", (req, res) => {
-  res.json([
-    {
-      id: "a1",
-      severity: "warning",
-      metric: "SpO2",
-      message: "SpO2 below threshold",
-      ts: new Date(Date.now() - 2 * 60_000).toISOString(),
-      emailStatus: "sent",
-      state: "active",
-    },
-    {
-      id: "a2",
-      severity: "critical",
-      metric: "BP",
-      message: "Blood pressure critically high",
-      ts: new Date(Date.now() - 8 * 60_000).toISOString(),
-      emailStatus: "failed",
-      state: "active",
-    },
-    {
-      id: "a3",
-      severity: "warning",
-      metric: "HR",
-      message: "Heart rate above warning threshold",
-      ts: new Date(Date.now() - 30 * 60_000).toISOString(),
-      emailStatus: "pending",
-      state: "active",
-    },
-    {
-      id: "a4",
-      severity: "normal",
-      metric: "Temp",
-      message: "Temperature back to normal",
-      ts: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
-      emailStatus: "sent",
-      state: "resolved",
-    },
-    {
-      id: "a5",
-      severity: "warning",
-      metric: "RR",
-      message: "Respiratory rate low",
-      ts: new Date(Date.now() - 6 * 60 * 60_000).toISOString(),
-      emailStatus: "not_set",
-      state: "active",
-    },
-  ]);
+  const list = [...state.alerts].sort((a, b) => {
+    const ta = a.ts ? new Date(a.ts).getTime() : 0;
+    const tb = b.ts ? new Date(b.ts).getTime() : 0;
+    return tb - ta;
+  });
+
+  res.json(list);
+});
+
+app.post("/api/alerts/:id/resolve", (req, res) => {
+  const item = state.alerts.find((a) => a.id === req.params.id);
+  if (!item) {
+    return res.status(404).json({ ok: false, error: "Alert not found" });
+  }
+
+  item.state = "resolved";
+  item.lastActionAt = new Date().toISOString();
+
+  res.json({ ok: true, alert: item });
+});
+
+app.post("/api/alerts/:id/resend", (req, res) => {
+  const item = state.alerts.find((a) => a.id === req.params.id);
+  if (!item) {
+    return res.status(404).json({ ok: false, error: "Alert not found" });
+  }
+
+  item.emailStatus = "sent";
+  item.lastEmailAt = new Date().toISOString();
+
+  console.log("RESEND ALERT EMAIL:", {
+    alertId: item.id,
+    emails: state.caregivers.map((c) => c.email),
+  });
+
+  res.json({ ok: true, alert: item, count: state.caregivers.length });
+});
+
+app.post("/api/alerts/:id/emergency", (req, res) => {
+  const item = state.alerts.find((a) => a.id === req.params.id);
+  if (!item) {
+    return res.status(404).json({ ok: false, error: "Alert not found" });
+  }
+
+  console.log("EMERGENCY BROADCAST:", {
+    alertId: item.id,
+    message: item.message,
+    caregivers: state.caregivers.map((c) => c.email),
+    emergencyEmail: state.settings.emergencyEmail || null,
+  });
+
+  item.emailStatus = "sent";
+  item.lastEmergencyAt = new Date().toISOString();
+
+  res.json({
+    ok: true,
+    alert: item,
+    caregivers: state.caregivers.length,
+    emergencyEmail: state.settings.emergencyEmail || null,
+  });
 });
 
 app.get("/api/caregivers", (req, res) => {

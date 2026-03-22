@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAlerts, AlertItem } from "../services/api";
+import { getAlerts, AlertItem, resolveAlert, triggerEmergencyAlert } from "../services/api";
 
 type Filter = "active" | "all" | "resolved";
 
@@ -29,6 +29,7 @@ const AlertsList: React.FC = () => {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -97,6 +98,37 @@ const AlertsList: React.FC = () => {
       return tb - ta;
     });
   }, [normalized, liveCritical]);
+
+  async function reload() {
+    const data = await getAlerts();
+    setAlerts(Array.isArray(data) ? data : []);
+  }
+
+  async function onDismiss(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await resolveAlert(id);
+      await reload();
+    } catch (e: any) {
+      setError(e?.message || "Failed to dismiss alert");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onEmergency(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await triggerEmergencyAlert(id);
+      navigate("/caregivers");
+    } catch (e: any) {
+      setError(e?.message || "Emergency action failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -186,9 +218,9 @@ const AlertsList: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // 这里先不做真实拨号逻辑，你后面可以接电话/通知
-                      alert("Emergency action placeholder");
+                      onEmergency(liveCritical.id);
                     }}
+                    disabled={busyId === liveCritical.id}
                     className={`flex-1 h-10 text-white rounded-lg font-bold text-xs shadow-md flex items-center justify-center gap-2 ${
                       liveCritical.severity === "critical" ? "bg-red-500" : "bg-orange-500"
                     }`}
@@ -199,9 +231,9 @@ const AlertsList: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Dismiss/Resolve 以后接后端：POST /api/alerts/:id/resolve
-                      alert("Dismiss placeholder (connect to /api/alerts/:id/resolve later)");
+                      onDismiss(liveCritical.id);
                     }}
+                    disabled={busyId === liveCritical.id}
                     className="h-10 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-xs"
                   >
                     Dismiss

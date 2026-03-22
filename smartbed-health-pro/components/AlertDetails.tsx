@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getAlerts, AlertItem } from "../services/api";
+import { getAlerts, AlertItem, resendAlert, resolveAlert, triggerEmergencyAlert } from "../services/api";
 
 function formatTime(ts?: string) {
   if (!ts) return "";
@@ -23,6 +23,7 @@ const AlertDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alert, setAlert] = useState<AlertItem | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +52,12 @@ const AlertDetails: React.FC = () => {
       window.clearInterval(t);
     };
   }, [id]);
+
+  async function reloadCurrent() {
+    const list = await getAlerts();
+    const found = list.find((a) => a.id === id) ?? null;
+    setAlert(found);
+  }
 
   const ui = useMemo(() => {
     const sev = alert?.severity ?? "warning";
@@ -248,13 +255,17 @@ const AlertDetails: React.FC = () => {
                   {emailUI.showRetry || emailUI.showConfig ? (
                     <div className="grid grid-cols-2 gap-3 mt-4">
                       <button
-                        disabled={!emailUI.showRetry}
+                        disabled={!emailUI.showRetry || busyAction !== null}
                         onClick={() => {
-                          // 以后接：POST /api/alerts/:id/resend
-                          alert("Retry placeholder (connect to resend endpoint later)");
+                          if (!alert?.id) return;
+                          setBusyAction("retry");
+                          resendAlert(alert.id)
+                            .then(reloadCurrent)
+                            .catch((e) => setError(e?.message || "Retry failed"))
+                            .finally(() => setBusyAction(null));
                         }}
                         className={`font-bold py-2.5 px-2 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md ${
-                          emailUI.showRetry
+                          emailUI.showRetry && busyAction === null
                             ? "bg-primary text-white"
                             : "bg-gray-200 text-gray-500 cursor-not-allowed shadow-none"
                         }`}
@@ -309,18 +320,38 @@ const AlertDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Sticky Bottom Actions（先做 placeholder） */}
+      {/* Sticky Bottom Actions */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] p-4 bg-gradient-to-t from-white dark:from-background-dark via-white dark:via-background-dark to-transparent z-50">
-        <button
-          onClick={() => {
-            // 以后接：POST /api/alerts/:id/ack 或 /resolve
-            alert("Acknowledge placeholder (connect to backend later)");
-            navigate(-1);
-          }}
-          className="w-full bg-[#111418] dark:bg-white text-white dark:text-[#111418] font-bold py-4 rounded-2xl shadow-xl text-base active:scale-[0.98] transition-all"
-        >
-          Acknowledge & Close Alert
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => {
+              if (!alert?.id) return;
+              setBusyAction("emergency");
+              triggerEmergencyAlert(alert.id)
+                .then(() => navigate("/caregivers"))
+                .catch((e) => setError(e?.message || "Emergency action failed"))
+                .finally(() => setBusyAction(null));
+            }}
+            disabled={busyAction !== null || !alert}
+            className="bg-red-600 text-white font-bold py-4 rounded-2xl shadow-xl text-sm active:scale-[0.98] transition-all disabled:opacity-40"
+          >
+            Emergency Contact
+          </button>
+          <button
+            onClick={() => {
+              if (!alert?.id) return;
+              setBusyAction("resolve");
+              resolveAlert(alert.id)
+                .then(() => navigate("/alerts"))
+                .catch((e) => setError(e?.message || "Resolve failed"))
+                .finally(() => setBusyAction(null));
+            }}
+            disabled={busyAction !== null || !alert}
+            className="bg-[#111418] dark:bg-white text-white dark:text-[#111418] font-bold py-4 rounded-2xl shadow-xl text-sm active:scale-[0.98] transition-all disabled:opacity-40"
+          >
+            Acknowledge & Close
+          </button>
+        </div>
       </div>
     </div>
   );

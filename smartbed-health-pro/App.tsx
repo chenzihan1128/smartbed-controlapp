@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import AlertsList from './components/AlertsList';
@@ -10,10 +10,14 @@ import AlertDetails from './components/AlertDetails';
 import DeviceScan from './components/DeviceScan';
 import { SystemStatus } from './types';
 import EmergencyEmail from "./components/EmergencyEmail";
+import { AlertItem, getAlerts, resolveAlert, triggerEmergencyAlert } from './services/api';
 
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus>('normal');
+  const [criticalAlert, setCriticalAlert] = useState<AlertItem | null>(null);
+  const [popupDismissedId, setPopupDismissedId] = useState<string | null>(null);
+  const [popupBusy, setPopupBusy] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -27,6 +31,67 @@ const App: React.FC = () => {
   const hideNav =
   ['/alert-rules', '/caregivers', '/device-scan', '/emergency-email'].some(p => location.pathname === p) ||
   location.pathname.startsWith('/alert/');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAlerts() {
+      try {
+        const list = await getAlerts();
+        if (cancelled) return;
+
+        const nextCritical =
+          list.find((a) => a.severity === 'critical' && (a.state ?? 'active') !== 'resolved') ?? null;
+
+        setCriticalAlert(nextCritical);
+
+        if (nextCritical && nextCritical.id !== popupDismissedId) {
+          setStatus('critical');
+        } else if (!nextCritical && status === 'critical') {
+          setStatus('normal');
+        }
+      } catch {
+        // ignore popup fetch errors
+      }
+    }
+
+    loadAlerts();
+    const t = window.setInterval(loadAlerts, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, [popupDismissedId, status]);
+
+  const showCriticalPopup = useMemo(() => {
+    return !!criticalAlert && criticalAlert.id !== popupDismissedId;
+  }, [criticalAlert, popupDismissedId]);
+
+  async function handleResolveCritical() {
+    if (!criticalAlert) return;
+    setPopupBusy(true);
+    try {
+      await resolveAlert(criticalAlert.id);
+      setPopupDismissedId(criticalAlert.id);
+      setCriticalAlert(null);
+      setStatus('normal');
+    } finally {
+      setPopupBusy(false);
+    }
+  }
+
+  async function handleEmergencyAction() {
+    if (!criticalAlert) return;
+    setPopupBusy(true);
+    try {
+      await triggerEmergencyAlert(criticalAlert.id);
+      setPopupDismissedId(criticalAlert.id);
+      navigate('/caregivers');
+    } finally {
+      setPopupBusy(false);
+    }
+  }
 
 
   return (
@@ -98,6 +163,53 @@ const App: React.FC = () => {
             <div className="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
           </div>
         </nav>
+      )}
+
+      {showCriticalPopup && criticalAlert && (
+        <div className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-4">
+          <div className="w-full max-w-xl rounded-[28px] border border-red-300/60 bg-white dark:bg-background-dark shadow-2xl overflow-hidden">
+            <div className="bg-red-600 text-white px-5 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] opacity-80">Critical Alert</p>
+                <h3 className="text-xl font-black mt-1">{criticalAlert.metric || 'Emergency Event'}</h3>
+              </div>
+              <span className="material-symbols-outlined text-3xl fill">warning</span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-base font-semibold text-[#111418] dark:text-white">
+                {criticalAlert.message || 'Immediate review required.'}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                A critical event is active. You can open details, notify caregivers, or dismiss the alert after review.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => navigate(`/alert/${criticalAlert.id}`)}
+                  disabled={popupBusy}
+                  className="h-12 rounded-xl bg-primary text-white font-black text-sm uppercase tracking-[0.16em] disabled:opacity-40"
+                >
+                  View Alert
+                </button>
+                <button
+                  onClick={handleEmergencyAction}
+                  disabled={popupBusy}
+                  className="h-12 rounded-xl bg-red-600 text-white font-black text-sm uppercase tracking-[0.16em] disabled:opacity-40"
+                >
+                  Notify Now
+                </button>
+                <button
+                  onClick={handleResolveCritical}
+                  disabled={popupBusy}
+                  className="h-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-black text-sm uppercase tracking-[0.16em] disabled:opacity-40"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

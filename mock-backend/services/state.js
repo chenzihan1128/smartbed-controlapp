@@ -55,6 +55,54 @@ const state = {
       message: null,
       severity: null, // normal | warning | critical
     },
+
+    alerts: [
+      {
+        id: "a1",
+        severity: "warning",
+        metric: "SpO2",
+        message: "SpO2 below threshold",
+        ts: new Date(Date.now() - 2 * 60_000).toISOString(),
+        emailStatus: "sent",
+        state: "active",
+      },
+      {
+        id: "a2",
+        severity: "critical",
+        metric: "BP",
+        message: "Blood pressure critically high",
+        ts: new Date(Date.now() - 8 * 60_000).toISOString(),
+        emailStatus: "failed",
+        state: "active",
+      },
+      {
+        id: "a3",
+        severity: "warning",
+        metric: "HR",
+        message: "Heart rate above warning threshold",
+        ts: new Date(Date.now() - 30 * 60_000).toISOString(),
+        emailStatus: "pending",
+        state: "active",
+      },
+      {
+        id: "a4",
+        severity: "normal",
+        metric: "Temp",
+        message: "Temperature back to normal",
+        ts: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+        emailStatus: "sent",
+        state: "resolved",
+      },
+      {
+        id: "a5",
+        severity: "warning",
+        metric: "RR",
+        message: "Respiratory rate low",
+        ts: new Date(Date.now() - 6 * 60 * 60_000).toISOString(),
+        emailStatus: "not_set",
+        state: "active",
+      },
+    ],
   };
   
   export default state;
