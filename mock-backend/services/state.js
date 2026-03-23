@@ -17,6 +17,29 @@ const state = {
     settings: {
       emergencyEmail: "",
     },
+
+    alertRules: {
+      hr: {
+        warning: { high: 100, low: 55 },
+        critical: { high: 120, low: 40 },
+      },
+      spo2: {
+        warning: { high: 99, low: 94 },
+        critical: { high: 100, low: 90 },
+      },
+      bpSys: {
+        warning: { high: 140, low: 90 },
+        critical: { high: 160, low: 80 },
+      },
+      rr: {
+        warning: { high: 22, low: 12 },
+        critical: { high: 28, low: 10 },
+      },
+      temp: {
+        warning: { high: 37.8, low: 35.8 },
+        critical: { high: 38.6, low: 35.2 },
+      },
+    },
   
     lastUpdate: Date.now(),
   
@@ -56,53 +79,7 @@ const state = {
       severity: null, // normal | warning | critical
     },
 
-    alerts: [
-      {
-        id: "a1",
-        severity: "warning",
-        metric: "SpO2",
-        message: "SpO2 below threshold",
-        ts: new Date(Date.now() - 2 * 60_000).toISOString(),
-        emailStatus: "sent",
-        state: "active",
-      },
-      {
-        id: "a2",
-        severity: "critical",
-        metric: "BP",
-        message: "Blood pressure critically high",
-        ts: new Date(Date.now() - 8 * 60_000).toISOString(),
-        emailStatus: "failed",
-        state: "active",
-      },
-      {
-        id: "a3",
-        severity: "warning",
-        metric: "HR",
-        message: "Heart rate above warning threshold",
-        ts: new Date(Date.now() - 30 * 60_000).toISOString(),
-        emailStatus: "pending",
-        state: "active",
-      },
-      {
-        id: "a4",
-        severity: "normal",
-        metric: "Temp",
-        message: "Temperature back to normal",
-        ts: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
-        emailStatus: "sent",
-        state: "resolved",
-      },
-      {
-        id: "a5",
-        severity: "warning",
-        metric: "RR",
-        message: "Respiratory rate low",
-        ts: new Date(Date.now() - 6 * 60 * 60_000).toISOString(),
-        emailStatus: "not_set",
-        state: "active",
-      },
-    ],
+    alerts: [],
   };
   
   export default state;

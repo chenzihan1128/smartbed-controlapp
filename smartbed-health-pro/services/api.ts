@@ -68,10 +68,39 @@ export type Settings = {
   emergencyEmail: string;
 };
 
+export type AlertRulePayload = {
+  warning: { high: number; low: number };
+  critical: { high: number; low: number };
+};
+
+export type AlertRulesResponse = {
+  hr: AlertRulePayload;
+  spo2: AlertRulePayload;
+  bp: AlertRulePayload;
+  rr?: AlertRulePayload;
+  temp?: AlertRulePayload;
+};
+
 export async function getSettings() {
   const res = await fetch(apiUrl("/api/settings"));
   if (!res.ok) throw new Error(`Settings failed (${res.status})`);
   return (await res.json()) as Settings;
+}
+
+export async function getAlertRules() {
+  const res = await fetch(apiUrl("/api/alert-rules"));
+  if (!res.ok) throw new Error(`Alert rules failed (${res.status})`);
+  return (await res.json()) as AlertRulesResponse;
+}
+
+export async function saveAlertRules(payload: AlertRulesResponse) {
+  const res = await fetch(apiUrl("/api/alert-rules"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Save alert rules failed (${res.status})`);
+  return await res.json();
 }
 
 export async function saveSettings(payload: Partial<Settings>) {

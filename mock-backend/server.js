@@ -5,6 +5,7 @@ import bedRoutes from "./routes/bedRoutes.js";
 import state from "./services/state.js";
 import { initBedController, shutdownBedController } from "./services/bedService.js";
 import { sendAlertEmail, sendTestEmail } from "./services/emailService.js";
+import { metrics as generateMetrics } from "./services/metricsService.js";
 
 const app = express();
 
@@ -22,29 +23,6 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-function rand(base, range) {
-  return Math.round((base + (Math.random() * 2 - 1) * range) * 10) / 10;
-}
-
-function metrics() {
-  state.lastUpdate = Date.now();
-
-  const data = {
-    ts: new Date().toISOString(),
-    hr: Math.round(rand(78, 10)),
-    rr: Math.round(rand(16, 4)),
-    spo2: Math.round(rand(97, 2)),
-    temp: rand(36.7, 0.4),
-    bp: {
-      sys: Math.round(rand(125, 15)),
-      dia: Math.round(rand(78, 10)),
-    },
-  };
-
-  state.metrics = data;
-  return data;
-}
-
 app.get("/api/settings", (req, res) => {
   res.json(state.settings);
 });
@@ -55,6 +33,59 @@ app.post("/api/settings", (req, res) => {
     state.settings.emergencyEmail = emergencyEmail.trim();
   }
   res.json({ ok: true, settings: state.settings });
+});
+
+app.get("/api/alert-rules", (req, res) => {
+  res.json({
+    hr: state.alertRules.hr,
+    spo2: state.alertRules.spo2,
+    bp: state.alertRules.bpSys,
+    rr: state.alertRules.rr,
+    temp: state.alertRules.temp,
+  });
+});
+
+app.post("/api/alert-rules", (req, res) => {
+  const payload = req.body || {};
+  const keys = [
+    ["hr", "hr"],
+    ["spo2", "spo2"],
+    ["bp", "bpSys"],
+    ["rr", "rr"],
+    ["temp", "temp"],
+  ];
+
+  for (const [inputKey, stateKey] of keys) {
+    const item = payload[inputKey];
+    if (!item) continue;
+
+    const warningHigh = Number(item?.warning?.high);
+    const warningLow = Number(item?.warning?.low);
+    const criticalHigh = Number(item?.critical?.high);
+    const criticalLow = Number(item?.critical?.low);
+
+    if (
+      [warningHigh, warningLow, criticalHigh, criticalLow].some((v) => Number.isNaN(v))
+    ) {
+      return res.status(400).json({ ok: false, error: `Invalid thresholds for ${inputKey}` });
+    }
+
+    state.alertRules[stateKey] = {
+      warning: { high: warningHigh, low: warningLow },
+      critical: { high: criticalHigh, low: criticalLow },
+    };
+  }
+
+  res.json({
+    ok: true,
+    rules: {
+      hr: state.alertRules.hr,
+      spo2: state.alertRules.spo2,
+      bp: state.alertRules.bpSys,
+      rr: state.alertRules.rr,
+      temp: state.alertRules.temp,
+    },
+  });
 });
 
 app.get("/api/status", (_, res) => {
@@ -72,7 +103,7 @@ app.get("/api/status", (_, res) => {
 });
 
 app.get("/api/metrics/latest", (_, res) => {
-  res.json(metrics());
+  res.json(generateMetrics());
 });
 
 app.get("/api/alerts", (req, res) => {
@@ -205,7 +236,7 @@ wss.on("connection", (ws) => {
     ws.send(
       JSON.stringify({
         type: "metrics",
-        data: metrics(),
+        data: generateMetrics(),
         safety: { state: state.safetyState },
         bed: state.bed,
       })
