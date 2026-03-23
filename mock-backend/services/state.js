@@ -79,6 +79,13 @@ const state = {
       severity: null, // normal | warning | critical
     },
 
+    alertEngine: {
+      confirmSamples: 3,
+      recoverySamples: 3,
+      criticalEmailCooldownMs: 120000,
+      metrics: {},
+    },
+
     alerts: [],
   };
   

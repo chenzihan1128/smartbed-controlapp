@@ -39,21 +39,48 @@ function findActiveAlert(metric) {
   return state.alerts.find((a) => a.metric === metric && a.state !== "resolved" && a.source === "engine");
 }
 
-async function queueCriticalEmail(alert) {
+function getMetricRuntime(metric) {
+  if (!state.alertEngine.metrics[metric]) {
+    state.alertEngine.metrics[metric] = {
+      pendingSeverity: "normal",
+      activeSeverity: "normal",
+      abnormalCount: 0,
+      normalCount: 0,
+      lastEmailAtMs: 0,
+    };
+  }
+
+  return state.alertEngine.metrics[metric];
+}
+
+async function queueCriticalEmail(alert, runtime) {
   alert.emailStatus = "pending";
 
   try {
     const result = await sendAlertEmail(alert);
     alert.emailStatus = result.ok ? "sent" : result.reason === "no_recipients" ? "not_set" : "failed";
     alert.lastEmailAt = toIsoNow();
+    runtime.lastEmailAtMs = Date.now();
   } catch (err) {
     console.error("Failed to send alert email:", err);
     alert.emailStatus = "failed";
     alert.lastEmailAt = toIsoNow();
+    runtime.lastEmailAtMs = Date.now();
   }
 }
 
-function createAlert(metric, severity, value) {
+function maybeSendCriticalEmail(alert, runtime) {
+  const cooldownMs = state.alertEngine.criticalEmailCooldownMs;
+  const now = Date.now();
+
+  if (now - runtime.lastEmailAtMs < cooldownMs) {
+    return;
+  }
+
+  void queueCriticalEmail(alert, runtime);
+}
+
+function createAlert(metric, severity, value, runtime) {
   const alert = {
     id: `auto-${nextAlertId++}`,
     metric,
@@ -68,7 +95,7 @@ function createAlert(metric, severity, value) {
   state.alerts.unshift(alert);
 
   if (severity === "critical") {
-    void queueCriticalEmail(alert);
+    maybeSendCriticalEmail(alert, runtime);
   }
 
   return alert;
@@ -82,14 +109,52 @@ function resolveAlert(alert, metric) {
 
 function upsertAlert(metric, severity, value) {
   const current = findActiveAlert(metric);
+  const runtime = getMetricRuntime(metric);
+  const confirmSamples = state.alertEngine.confirmSamples;
+  const recoverySamples = state.alertEngine.recoverySamples;
 
   if (severity === "normal") {
-    if (current) resolveAlert(current, metric);
+    runtime.abnormalCount = 0;
+    runtime.pendingSeverity = "normal";
+
+    if (!current) {
+      runtime.activeSeverity = "normal";
+      runtime.normalCount = 0;
+      return;
+    }
+
+    runtime.normalCount += 1;
+    if (runtime.normalCount < recoverySamples) return;
+
+    resolveAlert(current, metric);
+    runtime.activeSeverity = "normal";
+    runtime.normalCount = 0;
+    return;
+  }
+
+  runtime.normalCount = 0;
+
+  if (runtime.pendingSeverity === severity) {
+    runtime.abnormalCount += 1;
+  } else {
+    runtime.pendingSeverity = severity;
+    runtime.abnormalCount = 1;
+  }
+
+  if (runtime.activeSeverity === severity) {
+    if (current) {
+      current.message = buildMessage(metric, severity, value);
+    }
+    return;
+  }
+
+  if (runtime.abnormalCount < confirmSamples) {
     return;
   }
 
   if (!current) {
-    createAlert(metric, severity, value);
+    createAlert(metric, severity, value, runtime);
+    runtime.activeSeverity = severity;
     return;
   }
 
@@ -98,9 +163,10 @@ function upsertAlert(metric, severity, value) {
   current.message = buildMessage(metric, severity, value);
   current.ts = toIsoNow();
   current.state = "active";
+  runtime.activeSeverity = severity;
 
   if (severity === "critical" && !wasCritical) {
-    void queueCriticalEmail(current);
+    maybeSendCriticalEmail(current, runtime);
   }
 }
 
