@@ -6,6 +6,7 @@ import state from "./services/state.js";
 import { initBedController, shutdownBedController } from "./services/bedService.js";
 import { sendAlertEmail, sendTestEmail } from "./services/emailService.js";
 import { metrics as generateMetrics } from "./services/metricsService.js";
+import { loadPersistentState, persistAppState } from "./services/storageService.js";
 import {
   initSensorReader,
   shutdownSensorReader,
@@ -40,7 +41,14 @@ app.post("/api/settings", (req, res) => {
   if (typeof emergencyEmail === "string") {
     state.settings.emergencyEmail = emergencyEmail.trim();
   }
-  res.json({ ok: true, settings: state.settings });
+  Promise.resolve()
+    .then(async () => {
+      await persistAppState();
+      res.json({ ok: true, settings: state.settings });
+    })
+    .catch((err) => {
+      res.status(500).json({ ok: false, error: err.message });
+    });
 });
 
 app.get("/api/alert-rules", (req, res) => {
@@ -219,7 +227,56 @@ app.post("/api/caregivers", (req, res) => {
   };
 
   state.caregivers.unshift(item);
-  res.json({ ok: true, caregiver: item });
+  Promise.resolve()
+    .then(async () => {
+      await persistAppState();
+      res.json({ ok: true, caregiver: item });
+    })
+    .catch((err) => {
+      res.status(500).json({ ok: false, error: err.message });
+    });
+});
+
+app.put("/api/caregivers/:id", (req, res) => {
+  const item = state.caregivers.find((c) => c.id === req.params.id);
+  if (!item) {
+    return res.status(404).json({ ok: false, error: "Caregiver not found" });
+  }
+
+  const { name, email } = req.body || {};
+  if (!name || !email) {
+    return res.status(400).json({ ok: false, error: "name and email required" });
+  }
+
+  item.name = String(name).trim();
+  item.email = String(email).trim();
+
+  Promise.resolve()
+    .then(async () => {
+      await persistAppState();
+      res.json({ ok: true, caregiver: item });
+    })
+    .catch((err) => {
+      res.status(500).json({ ok: false, error: err.message });
+    });
+});
+
+app.delete("/api/caregivers/:id", (req, res) => {
+  const index = state.caregivers.findIndex((c) => c.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ ok: false, error: "Caregiver not found" });
+  }
+
+  const [removed] = state.caregivers.splice(index, 1);
+
+  Promise.resolve()
+    .then(async () => {
+      await persistAppState();
+      res.json({ ok: true, caregiver: removed });
+    })
+    .catch((err) => {
+      res.status(500).json({ ok: false, error: err.message });
+    });
 });
 
 app.post("/api/caregivers/test-email", (req, res) => {
@@ -352,6 +409,7 @@ function listenAsync(port) {
 
 async function start() {
   try {
+    await loadPersistentState();
     await initBedController();
     await initSensorReader();
     await listenAsync(8000);

@@ -222,6 +222,34 @@ export async function addCaregiver(payload: { name: string; email: string }) {
   return await res.json();
 }
 
+export async function updateCaregiver(id: string, payload: { name: string; email: string }) {
+  const res = await fetch(apiUrl(`/api/caregivers/${id}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Update caregiver failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+export async function deleteCaregiver(id: string) {
+  const res = await fetch(apiUrl(`/api/caregivers/${id}`), {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Delete caregiver failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
 export async function sendTestEmailToAll() {
   const res = await fetch(apiUrl("/api/caregivers/test-email"), { method: "POST" });
   if (!res.ok) throw new Error(`Test email failed (${res.status})`);

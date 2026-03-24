@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { addCaregiver, Caregiver, getCaregivers, sendTestEmailToAll } from "../services/api";
+import { addCaregiver, Caregiver, deleteCaregiver, getCaregivers, sendTestEmailToAll, updateCaregiver } from "../services/api";
 
 const CaregiverManager: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +11,7 @@ const CaregiverManager: React.FC = () => {
 
   // add modal
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,7 +51,26 @@ const CaregiverManager: React.FC = () => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
   }
 
-  async function onAdd() {
+  async function refreshCaregivers() {
+    const list = await getCaregivers();
+    setCaregivers(Array.isArray(list) ? list : []);
+  }
+
+  function openAddModal() {
+    setEditingId(null);
+    setName("");
+    setEmail("");
+    setShowAdd(true);
+  }
+
+  function openEditModal(caregiver: Caregiver) {
+    setEditingId(caregiver.id);
+    setName(caregiver.name);
+    setEmail(caregiver.email);
+    setShowAdd(true);
+  }
+
+  async function onSaveCaregiver() {
     setError(null);
     const n = name.trim();
     const e = email.trim();
@@ -61,17 +81,33 @@ const CaregiverManager: React.FC = () => {
 
     setSaving(true);
     try {
-      await addCaregiver({ name: n, email: e });
-      // refresh list
-      const list = await getCaregivers();
-      setCaregivers(list);
+      if (editingId) {
+        await updateCaregiver(editingId, { name: n, email: e });
+      } else {
+        await addCaregiver({ name: n, email: e });
+      }
+      await refreshCaregivers();
       setShowAdd(false);
+      setEditingId(null);
       setName("");
       setEmail("");
     } catch (err: any) {
       setError(err?.message || "Add failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onDelete(caregiver: Caregiver) {
+    const confirmed = window.confirm(`Delete caregiver ${caregiver.name}?`);
+    if (!confirmed) return;
+
+    setError(null);
+    try {
+      await deleteCaregiver(caregiver.id);
+      await refreshCaregivers();
+    } catch (err: any) {
+      setError(err?.message || "Delete failed");
     }
   }
 
@@ -102,7 +138,7 @@ const CaregiverManager: React.FC = () => {
       <div className="flex-1 px-4 pt-4">
         <div className="flex items-center justify-end mb-6">
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={openAddModal}
             className="flex items-center gap-1 text-white bg-primary px-5 py-2 rounded-lg transition-all active:scale-95 shadow-md"
           >
             <span className="material-symbols-outlined text-sm font-bold">add</span>
@@ -134,18 +170,18 @@ const CaregiverManager: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => alert("Send single email placeholder")}
+                  onClick={() => openEditModal(caregiver)}
                   className="text-primary p-2 hover:bg-primary/10 rounded-full transition-colors"
-                  title="Send test to this caregiver"
+                  title="Edit caregiver"
                 >
-                  <span className="material-symbols-outlined text-[20px]">send</span>
+                  <span className="material-symbols-outlined text-[20px]">edit</span>
                 </button>
                 <button
-                  onClick={() => alert("More menu placeholder")}
-                  className="text-[#637588] dark:text-gray-400 p-2"
-                  title="More actions"
+                  onClick={() => onDelete(caregiver)}
+                  className="text-red-500 p-2"
+                  title="Delete caregiver"
                 >
-                  <span className="material-symbols-outlined">more_vert</span>
+                  <span className="material-symbols-outlined">delete</span>
                 </button>
               </div>
             </div>
@@ -215,14 +251,14 @@ const CaregiverManager: React.FC = () => {
 
               <button
                 disabled={saving}
-                onClick={onAdd}
+                onClick={onSaveCaregiver}
                 className="w-full h-12 rounded-xl bg-primary text-white font-black text-sm active:scale-[0.98] disabled:opacity-40"
               >
-                {saving ? "ADDING..." : "ADD"}
+                {saving ? "SAVING..." : editingId ? "SAVE CHANGES" : "ADD"}
               </button>
 
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                Tip: In the real backend, we will validate email and send a verification email if needed.
+                Changes are now saved into the backend local storage on the Pi.
               </p>
             </div>
           </div>
