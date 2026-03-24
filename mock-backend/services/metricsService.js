@@ -5,9 +5,52 @@ function rand(base, range) {
   return Math.round((base + (Math.random() * 2 - 1) * range) * 10) / 10;
 }
 
+function buildBaselineMetrics() {
+  return {
+    ts: new Date().toISOString(),
+    hr: 78,
+    rr: 16,
+    spo2: 97,
+    temp: null,
+    bp: {
+      sys: 122,
+      dia: 78,
+    },
+  };
+}
+
+function buildEmptyMetrics() {
+  return {
+    ts: new Date().toISOString(),
+    hr: null,
+    rr: null,
+    spo2: null,
+    temp: null,
+    bp: {
+      sys: null,
+      dia: null,
+    },
+  };
+}
+
 export function metrics() {
   state.lastUpdate = Date.now();
   const analysis = state.sensor.analysis || {};
+
+  if (!state.sensor.connected) {
+    const data = buildEmptyMetrics();
+    state.metrics = data;
+    evaluateMetrics(data);
+    return data;
+  }
+
+  if (!state.sensor.streaming) {
+    const frozen = state.metrics?.ts ? { ...state.metrics } : buildBaselineMetrics();
+    if (!state.metrics?.ts) {
+      state.metrics = frozen;
+    }
+    return frozen;
+  }
 
   const data = {
     ts: new Date().toISOString(),
