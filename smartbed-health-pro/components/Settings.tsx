@@ -1,8 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BackendStatus, getStatus } from '../services/api';
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStatus() {
+      try {
+        const next = await getStatus();
+        if (!cancelled) setBackendStatus(next);
+      } catch {}
+    }
+
+    loadStatus();
+    const timer = window.setInterval(loadStatus, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const ble = backendStatus?.ble;
+  const sensorSubtitle =
+    ble?.streaming
+      ? `Streaming PPG · packets ${ble?.lastPpg?.count ?? "--"}`
+      : ble?.state === 'connected'
+      ? 'Sensor connected and ready'
+      : ble?.lastError
+      ? 'Sensor disconnected or BLE error'
+      : 'Sensor offline';
+  const sensorIndicator =
+    ble?.streaming ? 'bg-emerald-500' : ble?.state === 'connected' ? 'bg-primary' : 'bg-gray-400';
 
   const SettingItem = ({ icon, title, subtitle, path, color, indicator }: any) => (
     <div 
@@ -43,9 +75,9 @@ const Settings: React.FC = () => {
             <SettingItem 
               icon="bluetooth" 
               title="BLE Sensor Management" 
-              subtitle="Connected: SmartBed-01" 
+              subtitle={sensorSubtitle}
               path="/device-scan"
-              indicator="bg-green-500"
+              indicator={sensorIndicator}
               color={{ bg: 'bg-primary/10', text: 'text-primary' }} 
             />
           </div>

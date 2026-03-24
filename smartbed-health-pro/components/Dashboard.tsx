@@ -17,6 +17,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const [safety, setSafety] = useState<SafetyState>("normal");
   const [lastUpdateMs, setLastUpdateMs] = useState<number>(0);
   const [staleBackend, setStaleBackend] = useState(false);
+  const [showPpgModal, setShowPpgModal] = useState(false);
+  const [ppgSamples, setPpgSamples] = useState<number[]>([]);
 
   const isStaleLocal = !lastUpdateMs || Date.now() - lastUpdateMs > 30_000;
   const isStale = staleBackend || isStaleLocal;
@@ -51,6 +53,29 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
       cleanup();
     };
   }, []);
+
+  useEffect(() => {
+    if (!showPpgModal) return;
+    let cancelled = false;
+
+    async function pollPpg() {
+      try {
+        const s = await getStatus();
+        if (cancelled) return;
+        setBackendStatus(s);
+        const next = Number(s?.ble?.lastPpg?.a);
+        if (!Number.isFinite(next)) return;
+        setPpgSamples((prev) => [...prev.slice(-71), next]);
+      } catch {}
+    }
+
+    pollPpg();
+    const timer = window.setInterval(pollPpg, 700);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [showPpgModal]);
 
   async function handleBedStartUp() {
     try {
@@ -87,13 +112,16 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
     }
   }
 
-  const VitalItem = ({ icon, label, value, unit, color }: any) => (
-    <div
+  const VitalItem = ({ icon, label, value, unit, color, onClick, hint }: any) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
       className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
         isDisconnected || isStale
           ? "border-gray-100 bg-gray-50 opacity-50"
           : "border-gray-100 bg-white dark:bg-gray-900 dark:border-gray-800"
-      }`}
+      } ${onClick ? "cursor-pointer active:scale-[0.98]" : "cursor-default"}`}
     >
       <span className={`material-symbols-outlined text-3xl mb-1 ${color}`}>{icon}</span>
       <p className="text-2xl font-black leading-none text-[#111418] dark:text-white">
@@ -103,7 +131,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
         {label}
       </p>
       {unit && <p className="text-[9px] text-gray-600 dark:text-gray-400 font-bold">{unit}</p>}
-    </div>
+      {hint && <p className="mt-1 text-[9px] text-primary font-black uppercase tracking-[0.16em]">{hint}</p>}
+    </button>
   );
 
   const hr = metrics?.hr;
@@ -121,6 +150,19 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const ppgB = ble?.lastPpg?.b ?? "--";
   const ppgCount = ble?.lastPpg?.count ?? "--";
   const lastPacketText = ble?.lastPacketAt ? new Date(ble.lastPacketAt).toLocaleTimeString() : "--";
+  const ppgMin = ppgSamples.length ? Math.min(...ppgSamples) : 0;
+  const ppgMax = ppgSamples.length ? Math.max(...ppgSamples) : 0;
+  const ppgRange = Math.max(ppgMax - ppgMin, 1);
+  const ppgPath =
+    ppgSamples.length < 2
+      ? ""
+      : ppgSamples
+          .map((value, index) => {
+            const x = (index / Math.max(ppgSamples.length - 1, 1)) * 100;
+            const y = 100 - ((value - ppgMin) / ppgRange) * 100;
+            return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+          })
+          .join(" ");
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-140px)] overflow-hidden bg-background-light dark:bg-background-dark">
@@ -161,7 +203,15 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
             </div>
 
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <VitalItem icon="favorite" label="Heart Rate" value={hr ?? "--"} unit="BPM" color="text-red-600" />
+              <VitalItem
+                icon="favorite"
+                label="Heart Rate"
+                value={hr ?? "--"}
+                unit="BPM"
+                color="text-red-600"
+                onClick={() => setShowPpgModal(true)}
+                hint="Tap For PPG"
+              />
               <VitalItem icon="water_drop" label="SpO2" value={spo2 ?? "--"} unit="%" color="text-primary" />
               <VitalItem icon="speed" label="Blood Pressure" value={bp ?? "--"} unit="SYS/DIA" color="text-orange-600" />
               <div className={`rounded-2xl border-2 p-4 transition-all ${
@@ -314,6 +364,77 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
           </div>
         </section>
       </div>
+
+      {showPpgModal && (
+        <div className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-[28px] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400">
+                  Real-Time Sensor
+                </p>
+                <h3 className="mt-1 text-xl font-black text-[#111418] dark:text-white">
+                  Heart Beat PPG Signal
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPpgModal(false)}
+                className="size-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px] font-bold">
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">Sensor</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{sensorLabel}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">Packets</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{ppgCount}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">PPG A</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white break-all">{ppgA}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">Last Seen</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{lastPacketText}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] bg-[#08111d] p-4 md:p-5 border border-slate-800">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">PPG Waveform</p>
+                    <p className="mt-1 text-xs text-slate-300">Based on live BLE packet stream</p>
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                    ble?.streaming ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                  }`}>
+                    {ble?.streaming ? "Live" : "Stopped"}
+                  </div>
+                </div>
+
+                <div className="mt-4 h-56 rounded-[24px] bg-slate-950/80 border border-slate-800 p-3">
+                  {ppgPath ? (
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+                      <path d={ppgPath} fill="none" stroke="#22c55e" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+                    </svg>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Waiting for PPG samples
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
