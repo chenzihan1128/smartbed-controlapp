@@ -17,6 +17,7 @@ function resetSensorState() {
   state.sensor.streaming = false;
   state.sensor.lastPacketAt = null;
   state.sensor.lastPpg = null;
+  state.sensor.lastError = null;
 }
 
 function applyMessage(msg) {
@@ -59,7 +60,7 @@ export async function initSensorReader() {
   };
 
   const proc = spawn(PYTHON, [SCRIPT_PATH], {
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
     env,
   });
 
@@ -104,6 +105,7 @@ export async function startSensorStream() {
     throw new Error("Sensor reader not available");
   }
   sensorProc.stdin.write("start\n");
+  state.sensor.lastError = null;
 }
 
 export async function stopSensorStream() {
@@ -111,4 +113,5 @@ export async function stopSensorStream() {
     throw new Error("Sensor reader not available");
   }
   sensorProc.stdin.write("stop\n");
+  state.sensor.streaming = false;
 }
