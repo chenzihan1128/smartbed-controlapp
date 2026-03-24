@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { SystemStatus } from "../types";
 import { connectStream, MetricsPayload, SafetyState } from "../services/ws";
-import { bedAction, getStatus } from "../services/api";
+import { bedAction, BackendStatus, getStatus, sensorAction } from "../services/api";
 
 interface DashboardProps {
   status: SystemStatus;
@@ -12,6 +12,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const isDisconnected = status === "disconnected";
 
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
+  const [sensorBusy, setSensorBusy] = useState(false);
   const [safety, setSafety] = useState<SafetyState>("normal");
   const [lastUpdateMs, setLastUpdateMs] = useState<number>(0);
   const [staleBackend, setStaleBackend] = useState(false);
@@ -21,12 +23,20 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const isCritical = safety === "locked";
 
   useEffect(() => {
-    getStatus()
-      .then((s) => {
+    let cancelled = false;
+
+    async function loadStatus() {
+      try {
+        const s = await getStatus();
+        if (cancelled) return;
+        setBackendStatus(s);
         setStaleBackend(!!s?.stale);
         if (s?.safety?.state) setSafety(s.safety.state);
-      })
-      .catch(() => {});
+      } catch {}
+    }
+
+    loadStatus();
+    const statusTimer = window.setInterval(loadStatus, 3000);
 
     const cleanup = connectStream((m, safetyState) => {
       setMetrics(m);
@@ -35,7 +45,11 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
       if (safetyState) setSafety(safetyState);
     });
 
-    return cleanup;
+    return () => {
+      cancelled = true;
+      window.clearInterval(statusTimer);
+      cleanup();
+    };
   }, []);
 
   async function handleBedStartUp() {
@@ -62,6 +76,17 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
     } catch {}
   }
 
+  async function handleSensorToggle() {
+    try {
+      setSensorBusy(true);
+      await sensorAction(ble?.streaming ? "stop" : "start");
+      const s = await getStatus();
+      setBackendStatus(s);
+    } catch {} finally {
+      setSensorBusy(false);
+    }
+  }
+
   const VitalItem = ({ icon, label, value, unit, color }: any) => (
     <div
       className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
@@ -84,13 +109,18 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const hr = metrics?.hr;
   const spo2 = metrics?.spo2;
   const bp = metrics?.bp ? `${metrics.bp.sys}/${metrics.bp.dia}` : undefined;
-  const temp = metrics?.temp;
   const motionLabel =
     isCritical
       ? "Safety Locked"
       : isDisconnected || isStale
       ? "Controller Offline"
       : "Ready";
+  const ble = backendStatus?.ble;
+  const sensorLabel = ble?.streaming ? "Live Sensor" : ble?.state === "connected" ? "Connected" : "Disconnected";
+  const ppgA = ble?.lastPpg?.a ?? "--";
+  const ppgB = ble?.lastPpg?.b ?? "--";
+  const ppgCount = ble?.lastPpg?.count ?? "--";
+  const lastPacketText = ble?.lastPacketAt ? new Date(ble.lastPacketAt).toLocaleTimeString() : "--";
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-140px)] overflow-hidden bg-background-light dark:bg-background-dark">
@@ -134,7 +164,56 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
               <VitalItem icon="favorite" label="Heart Rate" value={hr ?? "--"} unit="BPM" color="text-red-600" />
               <VitalItem icon="water_drop" label="SpO2" value={spo2 ?? "--"} unit="%" color="text-primary" />
               <VitalItem icon="speed" label="Blood Pressure" value={bp ?? "--"} unit="SYS/DIA" color="text-orange-600" />
-              <VitalItem icon="thermostat" label="Temp" value={temp ?? "--"} unit="°C" color="text-yellow-600" />
+              <div className={`rounded-2xl border-2 p-4 transition-all ${
+                isDisconnected || isStale
+                  ? "border-gray-100 bg-gray-50 opacity-50"
+                  : "border-gray-100 bg-white dark:bg-gray-900 dark:border-gray-800"
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest">
+                      Sensor Live
+                    </p>
+                    <p className="mt-1 text-lg font-black text-[#111418] dark:text-white">
+                      {sensorLabel}
+                    </p>
+                  </div>
+                  <span className={`material-symbols-outlined text-3xl ${
+                    ble?.streaming ? "text-emerald-600" : ble?.state === "connected" ? "text-primary" : "text-gray-400"
+                  }`}>
+                    sensors
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold">
+                  <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
+                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">PPG A</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ppgA}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
+                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">PPG B</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ppgB}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
+                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">Packets</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white">{ppgCount}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
+                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Seen</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white">{lastPacketText}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSensorToggle}
+                  disabled={sensorBusy || ble?.state !== "connected"}
+                  className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-black uppercase tracking-[0.18em] disabled:opacity-40 ${
+                    ble?.streaming ? "bg-amber-500 text-white" : "bg-emerald-600 text-white"
+                  }`}
+                >
+                  {sensorBusy ? "Working..." : ble?.streaming ? "Stop Sensor" : "Start Sensor"}
+                </button>
+              </div>
             </div>
           </div>
 

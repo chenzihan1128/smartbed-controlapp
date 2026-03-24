@@ -6,7 +6,12 @@ import state from "./services/state.js";
 import { initBedController, shutdownBedController } from "./services/bedService.js";
 import { sendAlertEmail, sendTestEmail } from "./services/emailService.js";
 import { metrics as generateMetrics } from "./services/metricsService.js";
-import { initSensorReader, shutdownSensorReader } from "./services/sensorService.js";
+import {
+  initSensorReader,
+  shutdownSensorReader,
+  startSensorStream,
+  stopSensorStream,
+} from "./services/sensorService.js";
 
 const app = express();
 
@@ -224,6 +229,24 @@ app.post("/api/caregivers/test-email", (req, res) => {
   }).catch((err) => {
     res.status(500).json({ ok: false, error: err.message });
   });
+});
+
+app.post("/api/sensor/start", async (req, res) => {
+  try {
+    await startSensorStream();
+    res.json({ ok: true, ble: state.sensor });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/sensor/stop", async (req, res) => {
+  try {
+    await stopSensorStream();
+    res.json({ ok: true, ble: state.sensor });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 app.use("/api/bed", bedRoutes);

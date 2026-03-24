@@ -23,6 +23,7 @@ function applyMessage(msg) {
   if (msg.type === "status") {
     if (msg.state === "connected") state.sensor.connected = true;
     if (msg.state === "streaming") state.sensor.streaming = true;
+    if (msg.state === "idle") state.sensor.streaming = false;
     if (msg.state === "disconnected" || msg.state === "stopped") {
       resetSensorState();
     }
@@ -90,6 +91,24 @@ export async function initSensorReader() {
 export async function shutdownSensorReader() {
   if (!sensorProc) return;
   try {
+    if (sensorProc.stdin?.writable) {
+      sensorProc.stdin.write("exit\n");
+    }
     sensorProc.kill("SIGTERM");
   } catch {}
+}
+
+export async function startSensorStream() {
+  await initSensorReader();
+  if (!sensorProc?.stdin?.writable) {
+    throw new Error("Sensor reader not available");
+  }
+  sensorProc.stdin.write("start\n");
+}
+
+export async function stopSensorStream() {
+  if (!sensorProc?.stdin?.writable) {
+    throw new Error("Sensor reader not available");
+  }
+  sensorProc.stdin.write("stop\n");
 }

@@ -20,6 +20,7 @@ def cmd_mode(m: int) -> bytes:
 
 buf = bytearray()
 packet_count = 0
+stream_enabled = False
 
 
 def emit(payload):
@@ -88,6 +89,7 @@ def handle_notify(_: int, data: bytearray):
 
 
 async def run_once():
+    global stream_enabled
     client = BleakClient(MAC)
     emit({"type": "status", "state": "connecting", "mac": MAC})
 
@@ -103,15 +105,43 @@ async def run_once():
         emit({"type": "status", "state": "mode_set", "mode": MODE})
         await asyncio.sleep(2.0)
         await client.write_gatt_char(UUID_WRITE, CMD_START, response=True)
+        stream_enabled = True
         emit({"type": "status", "state": "streaming"})
 
-        while client.is_connected:
+        async def command_loop():
+            global stream_enabled
+            while client.is_connected:
+                line = await asyncio.to_thread(sys.stdin.readline)
+                if not line:
+                    await asyncio.sleep(0.2)
+                    continue
+
+                cmd = line.strip().lower()
+                if cmd == "stop":
+                    await client.write_gatt_char(UUID_WRITE, CMD_STOP, response=True)
+                    stream_enabled = False
+                    emit({"type": "status", "state": "idle"})
+                elif cmd == "start":
+                    await client.write_gatt_char(UUID_WRITE, cmd_mode(MODE), response=True)
+                    await asyncio.sleep(1.0)
+                    await client.write_gatt_char(UUID_WRITE, CMD_START, response=True)
+                    stream_enabled = True
+                    emit({"type": "status", "state": "streaming"})
+                elif cmd == "exit":
+                    break
+
+        command_task = asyncio.create_task(command_loop())
+
+        while client.is_connected and not command_task.done():
             await asyncio.sleep(1.0)
+
+        command_task.cancel()
 
     finally:
         try:
             if client.is_connected:
                 await client.write_gatt_char(UUID_WRITE, CMD_STOP, response=True)
+                stream_enabled = False
                 await client.stop_notify(UUID_NOTIFY)
                 await client.disconnect()
         except Exception:

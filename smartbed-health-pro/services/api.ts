@@ -1,5 +1,27 @@
 export type BedAction = "start-up" | "start-down" | "stop" | "flat";
 
+export type BackendStatus = {
+  ble: {
+    state: "connected" | "disconnected";
+    rssi?: number;
+    battery?: number;
+    streaming?: boolean;
+    lastPacketAt?: string | null;
+    lastPpg?: {
+      a?: string;
+      b?: string;
+      count?: number;
+    } | null;
+    lastError?: string | null;
+  };
+  stale?: boolean;
+  lastUpdate?: string;
+  safety?: {
+    state?: "normal" | "limited" | "locked";
+  };
+  bed?: unknown;
+};
+
 function getApiBaseUrl() {
   if (!import.meta.env.PROD) return "";
 
@@ -24,10 +46,23 @@ export async function bedAction(action: BedAction) {
   return res.json().catch(() => ({ ok: true }));
 }
 
+export async function sensorAction(action: "start" | "stop") {
+  const res = await fetch(apiUrl(`/api/sensor/${action}`), {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Sensor request failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
 export async function getStatus() {
   const res = await fetch(apiUrl("/api/status"));
   if (!res.ok) throw new Error(`Status failed (${res.status})`);
-  return res.json();
+  return (await res.json()) as BackendStatus;
 }
 
 export type AlertItem = {
