@@ -124,15 +124,13 @@ const DeviceScan: React.FC = () => {
             {scannedDevices.length ? scannedDevices.map((device) => {
               const isActive = device.address === (ble?.targetMac || selectedAddress);
               return (
-                <button
+                <div
                   key={device.address}
-                  onClick={() => handleConnect(device.address)}
-                  disabled={busy}
                   className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left ${
                     isActive
                       ? 'bg-primary/10 border-primary shadow-sm'
                       : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-800'
-                  } disabled:opacity-40`}
+                  }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className={`size-11 rounded-full flex items-center justify-center shrink-0 ${isActive ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500'}`}>
@@ -147,11 +145,19 @@ const DeviceScan: React.FC = () => {
                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
                       RSSI {device.rssi ?? '--'}
                     </p>
-                    <p className={`mt-1 text-[10px] font-black uppercase tracking-[0.16em] ${isActive ? 'text-primary' : 'text-gray-500'}`}>
-                      {busy && selectedAddress === device.address ? 'Connecting...' : isActive ? 'Selected' : 'Connect'}
-                    </p>
+                    <button
+                      onClick={() => handleConnect(device.address)}
+                      disabled={busy}
+                      className={`mt-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-40 ${
+                        isActive
+                          ? 'bg-primary text-white'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      {busy && selectedAddress === device.address ? 'Connecting...' : isActive ? 'Connected' : 'Connect'}
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             }) : (
               <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 px-4 py-6 text-center">
@@ -202,7 +208,7 @@ const DeviceScan: React.FC = () => {
             Back To Dashboard
           </button>
           <p className="text-center text-[10px] text-gray-400 mt-6 px-10 leading-relaxed uppercase tracking-[0.2em] font-bold">
-            Keep the sensor on skin contact and use stop if the green light should turn off
+            Scan first, then press connect on the correct BLE device before starting the sensor
           </p>
         </div>
       </main>

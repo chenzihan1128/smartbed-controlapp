@@ -411,7 +411,6 @@ async function start() {
   try {
     await loadPersistentState();
     await initBedController();
-    await initSensorReader();
     await listenAsync(8000);
     console.log("Backend on http://localhost:8000");
   } catch (err) {
