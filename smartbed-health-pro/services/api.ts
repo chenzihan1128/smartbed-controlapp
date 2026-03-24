@@ -12,6 +12,18 @@ export type BackendStatus = {
       b?: string;
       count?: number;
     } | null;
+    lastWave?: {
+      ecg?: string;
+      ppg?: string;
+      count?: number;
+    } | null;
+    analysis?: {
+      hr?: number | null;
+      rr?: number | null;
+      spo2?: number | null;
+      sys?: number | null;
+      dia?: number | null;
+    } | null;
     lastError?: string | null;
   };
   stale?: boolean;

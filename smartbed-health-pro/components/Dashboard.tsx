@@ -19,6 +19,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
   const [staleBackend, setStaleBackend] = useState(false);
   const [showPpgModal, setShowPpgModal] = useState(false);
   const [ppgSamples, setPpgSamples] = useState<number[]>([]);
+  const [ecgSamples, setEcgSamples] = useState<number[]>([]);
 
   const isStaleLocal = !lastUpdateMs || Date.now() - lastUpdateMs > 30_000;
   const isStale = staleBackend || isStaleLocal;
@@ -63,9 +64,14 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
         const s = await getStatus();
         if (cancelled) return;
         setBackendStatus(s);
-        const next = Number(s?.ble?.lastPpg?.a);
-        if (!Number.isFinite(next)) return;
-        setPpgSamples((prev) => [...prev.slice(-71), next]);
+        const nextEcg = Number(s?.ble?.lastWave?.ecg ?? s?.ble?.lastPpg?.a);
+        const nextPpg = Number(s?.ble?.lastWave?.ppg ?? s?.ble?.lastPpg?.b);
+        if (Number.isFinite(nextEcg)) {
+          setEcgSamples((prev) => [...prev.slice(-71), nextEcg]);
+        }
+        if (Number.isFinite(nextPpg)) {
+          setPpgSamples((prev) => [...prev.slice(-71), nextPpg]);
+        }
       } catch {}
     }
 
@@ -135,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
     </button>
   );
 
-  const hr = metrics?.hr;
+  const hr = backendStatus?.ble?.analysis?.hr ?? metrics?.hr;
   const spo2 = metrics?.spo2;
   const bp = metrics?.bp ? `${metrics.bp.sys}/${metrics.bp.dia}` : undefined;
   const motionLabel =
@@ -146,23 +152,26 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
       : "Ready";
   const ble = backendStatus?.ble;
   const sensorLabel = ble?.streaming ? "Live Sensor" : ble?.state === "connected" ? "Connected" : "Disconnected";
-  const ppgA = ble?.lastPpg?.a ?? "--";
-  const ppgB = ble?.lastPpg?.b ?? "--";
-  const ppgCount = ble?.lastPpg?.count ?? "--";
+  const ecgValue = ble?.lastWave?.ecg ?? ble?.lastPpg?.a ?? "--";
+  const ppgValue = ble?.lastWave?.ppg ?? ble?.lastPpg?.b ?? "--";
+  const ppgCount = ble?.lastWave?.count ?? ble?.lastPpg?.count ?? "--";
   const lastPacketText = ble?.lastPacketAt ? new Date(ble.lastPacketAt).toLocaleTimeString() : "--";
-  const ppgMin = ppgSamples.length ? Math.min(...ppgSamples) : 0;
-  const ppgMax = ppgSamples.length ? Math.max(...ppgSamples) : 0;
-  const ppgRange = Math.max(ppgMax - ppgMin, 1);
-  const ppgPath =
-    ppgSamples.length < 2
+  const buildPath = (samples: number[]) => {
+    const min = samples.length ? Math.min(...samples) : 0;
+    const max = samples.length ? Math.max(...samples) : 0;
+    const range = Math.max(max - min, 1);
+    return samples.length < 2
       ? ""
-      : ppgSamples
+      : samples
           .map((value, index) => {
-            const x = (index / Math.max(ppgSamples.length - 1, 1)) * 100;
-            const y = 100 - ((value - ppgMin) / ppgRange) * 100;
+            const x = (index / Math.max(samples.length - 1, 1)) * 100;
+            const y = 100 - ((value - min) / range) * 100;
             return `${index === 0 ? "M" : "L"} ${x} ${y}`;
           })
           .join(" ");
+  };
+  const ecgPath = buildPath(ecgSamples);
+  const ppgPath = buildPath(ppgSamples);
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-140px)] overflow-hidden bg-background-light dark:bg-background-dark">
@@ -210,7 +219,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
                 unit="BPM"
                 color="text-red-600"
                 onClick={() => setShowPpgModal(true)}
-                hint="Tap For PPG"
+                hint="Tap For ECG/PPG"
               />
               <VitalItem icon="water_drop" label="SpO2" value={spo2 ?? "--"} unit="%" color="text-primary" />
               <VitalItem icon="speed" label="Blood Pressure" value={bp ?? "--"} unit="SYS/DIA" color="text-orange-600" />
@@ -238,11 +247,11 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold">
                   <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
                     <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">PPG A</p>
-                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ppgA}</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ecgValue}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
-                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">PPG B</p>
-                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ppgB}</p>
+                    <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">PPG</p>
+                    <p className="mt-1 text-xs text-[#111418] dark:text-white break-all">{ppgValue}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-gray-800 px-3 py-2">
                     <p className="text-gray-500 dark:text-gray-400 uppercase tracking-wider">Packets</p>
@@ -374,7 +383,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
                   Real-Time Sensor
                 </p>
                 <h3 className="mt-1 text-xl font-black text-[#111418] dark:text-white">
-                  Heart Beat PPG Signal
+                  ECG And PPG Signal
                 </h3>
               </div>
               <button
@@ -397,20 +406,46 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
                   <p className="mt-1 text-sm text-[#111418] dark:text-white">{ppgCount}</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
-                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">PPG A</p>
-                  <p className="mt-1 text-sm text-[#111418] dark:text-white break-all">{ppgA}</p>
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">ECG</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white break-all">{ecgValue}</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
-                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">Last Seen</p>
-                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{lastPacketText}</p>
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">PPG</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white break-all">{ppgValue}</p>
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-[28px] bg-[#08111d] p-4 md:p-5 border border-slate-800">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">ECG Waveform</p>
+                    <p className="mt-1 text-xs text-slate-300">Real waveform from 0x23 frame</p>
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                    ble?.streaming ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                  }`}>
+                    {ble?.streaming ? "Live" : "Stopped"}
+                  </div>
+                </div>
+
+                <div className="mt-4 h-56 rounded-[24px] bg-slate-950/80 border border-slate-800 p-3">
+                  {ecgPath ? (
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+                      <path d={ecgPath} fill="none" stroke="#f43f5e" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+                    </svg>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Waiting for ECG samples
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="rounded-[28px] bg-[#08111d] p-4 md:p-5 border border-slate-800">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">PPG Waveform</p>
-                    <p className="mt-1 text-xs text-slate-300">Based on live BLE packet stream</p>
+                    <p className="mt-1 text-xs text-slate-300">Real waveform from 0x23 frame</p>
                   </div>
                   <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
                     ble?.streaming ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
@@ -429,6 +464,30 @@ const Dashboard: React.FC<DashboardProps> = ({ status, onToggleStatus }) => {
                       Waiting for PPG samples
                     </div>
                   )}
+                </div>
+              </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[11px] font-bold">
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">HR</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{ble?.analysis?.hr ?? "--"}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">SpO2</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{ble?.analysis?.spo2 ?? "--"}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">SYS</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{ble?.analysis?.sys ?? "--"}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">DIA</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{ble?.analysis?.dia ?? "--"}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 dark:bg-gray-800 px-4 py-3">
+                  <p className="uppercase tracking-widest text-gray-500 dark:text-gray-400">Last Seen</p>
+                  <p className="mt-1 text-sm text-[#111418] dark:text-white">{lastPacketText}</p>
                 </div>
               </div>
             </div>

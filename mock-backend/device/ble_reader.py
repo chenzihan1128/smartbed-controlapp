@@ -33,21 +33,49 @@ def checksum_ok(frame: bytes) -> bool:
     return (sum(frame[:-2]) & 0xFF) == frame[-2]
 
 
-def parse_ppg_payload(payload: bytes):
+def parse_ecg_ppg_payload(payload: bytes):
     parts = payload.split(b"\x0D")
     if len(parts) < 2:
-      return None
+        return None
 
     try:
-        val_a = parts[0].decode("ascii", errors="ignore").strip()
-        val_b = parts[1].decode("ascii", errors="ignore").strip()
+        ecg = parts[0].decode("ascii", errors="ignore").strip()
+        ppg = parts[1].decode("ascii", errors="ignore").strip()
         return {
-            "type": "ppg",
-            "a": val_a,
-            "b": val_b,
+            "type": "wave",
+            "ecg": ecg,
+            "ppg": ppg,
         }
     except Exception:
         return None
+
+
+def parse_ascii_result_payload(payload: bytes):
+    try:
+        text = payload.decode("ascii", errors="ignore").strip()
+    except Exception:
+        return None
+
+    if "=" not in text:
+        return None
+
+    key, value = text.split("=", 1)
+    key = key.strip().upper()
+    value = value.strip()
+    if not key or not value:
+        return None
+
+    try:
+        parsed_value = float(value) if "." in value else int(value)
+    except ValueError:
+        parsed_value = value
+
+    return {
+        "type": "analysis",
+        "key": key,
+        "value": parsed_value,
+        "raw": text,
+    }
 
 
 def handle_frame(frame: bytes):
@@ -57,7 +85,7 @@ def handle_frame(frame: bytes):
 
     if head == 0x23:
         packet_count += 1
-        parsed = parse_ppg_payload(payload)
+        parsed = parse_ecg_ppg_payload(payload)
         if parsed:
             parsed["count"] = packet_count
             emit(parsed)
@@ -68,7 +96,11 @@ def handle_frame(frame: bytes):
         return
 
     if head == 0x26:
-        emit({"type": "log", "message": "device_ack_26"})
+        parsed = parse_ascii_result_payload(payload)
+        if parsed:
+            emit(parsed)
+        else:
+            emit({"type": "log", "message": "device_ack_26"})
         return
 
 

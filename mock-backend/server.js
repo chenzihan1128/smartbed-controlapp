@@ -103,6 +103,8 @@ app.get("/api/status", (_, res) => {
       streaming: !!state.sensor.streaming,
       lastPacketAt: state.sensor.lastPacketAt,
       lastPpg: state.sensor.lastPpg,
+      lastWave: state.sensor.lastWave,
+      analysis: state.sensor.analysis,
       lastError: state.sensor.lastError,
     },
     stale: Date.now() - state.lastUpdate > 30000,

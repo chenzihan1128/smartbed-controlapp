@@ -62,6 +62,14 @@ const state = {
       streaming: false,
       lastPacketAt: null,
       lastPpg: null,
+      lastWave: null,
+      analysis: {
+        hr: null,
+        rr: null,
+        spo2: null,
+        sys: null,
+        dia: null,
+      },
       lastError: null,
     },
   

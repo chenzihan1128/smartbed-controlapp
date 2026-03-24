@@ -7,29 +7,39 @@ function rand(base, range) {
 
 export function metrics() {
   state.lastUpdate = Date.now();
+  const analysis = state.sensor.analysis || {};
 
   const data = {
     ts: new Date().toISOString(),
-    hr: Math.round(rand(78, 7)),
-    rr: Math.round(rand(16, 2)),
-    spo2: Math.round(rand(97, 1)),
+    hr: Number.isFinite(analysis.hr) ? Number(analysis.hr) : Math.round(rand(78, 7)),
+    rr: Number.isFinite(analysis.rr) ? Number(analysis.rr) : Math.round(rand(16, 2)),
+    spo2: Number.isFinite(analysis.spo2) ? Number(analysis.spo2) : Math.round(rand(97, 1)),
     temp: rand(36.7, 0.25),
     bp: {
-      sys: Math.round(rand(125, 10)),
-      dia: Math.round(rand(78, 6)),
+      sys: Number.isFinite(analysis.sys) ? Number(analysis.sys) : Math.round(rand(125, 10)),
+      dia: Number.isFinite(analysis.dia) ? Number(analysis.dia) : Math.round(rand(78, 6)),
     },
   };
 
-  const roll = Math.random();
-  if (roll < 0.04) {
-    data.spo2 = Math.round(rand(88, 1.5));
-  } else if (roll < 0.07) {
-    data.bp.sys = Math.round(rand(168, 6));
-    data.bp.dia = Math.round(rand(102, 5));
-  } else if (roll < 0.1) {
-    data.hr = Math.round(rand(126, 4));
-  } else if (roll < 0.13) {
-    data.temp = rand(38.8, 0.2);
+  const usingRealAnalysis =
+    Number.isFinite(analysis.hr) ||
+    Number.isFinite(analysis.rr) ||
+    Number.isFinite(analysis.spo2) ||
+    Number.isFinite(analysis.sys) ||
+    Number.isFinite(analysis.dia);
+
+  if (!usingRealAnalysis) {
+    const roll = Math.random();
+    if (roll < 0.04) {
+      data.spo2 = Math.round(rand(88, 1.5));
+    } else if (roll < 0.07) {
+      data.bp.sys = Math.round(rand(168, 6));
+      data.bp.dia = Math.round(rand(102, 5));
+    } else if (roll < 0.1) {
+      data.hr = Math.round(rand(126, 4));
+    } else if (roll < 0.13) {
+      data.temp = rand(38.8, 0.2);
+    }
   }
 
   state.metrics = data;
