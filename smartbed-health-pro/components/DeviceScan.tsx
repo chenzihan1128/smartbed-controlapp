@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BackendStatus, getStatus, sensorAction } from '../services/api';
+import { BackendStatus, connectSensor, getStatus, scanSensors, sensorAction } from '../services/api';
 
 const DeviceScan: React.FC = () => {
   const navigate = useNavigate();
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,12 +38,36 @@ const DeviceScan: React.FC = () => {
     }
   }
 
+  async function handleScan() {
+    try {
+      setScanBusy(true);
+      await scanSensors();
+      const next = await getStatus();
+      setBackendStatus(next);
+    } catch {} finally {
+      setScanBusy(false);
+    }
+  }
+
+  async function handleConnect(address: string) {
+    try {
+      setBusy(true);
+      setSelectedAddress(address);
+      await connectSensor(address);
+      const next = await getStatus();
+      setBackendStatus(next);
+    } catch {} finally {
+      setBusy(false);
+    }
+  }
+
   const ble = backendStatus?.ble;
   const deviceStateLabel = ble?.streaming ? 'Streaming Live' : ble?.state === 'connected' ? 'Connected' : 'Disconnected';
   const lastSeen = ble?.lastPacketAt ? new Date(ble.lastPacketAt).toLocaleTimeString() : '--';
   const ppgA = ble?.lastPpg?.a ?? '--';
   const ppgB = ble?.lastPpg?.b ?? '--';
   const packets = ble?.lastPpg?.count ?? '--';
+  const scannedDevices = ble?.scannedDevices ?? [];
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
@@ -66,7 +92,16 @@ const DeviceScan: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 px-1">Connected Device</p>
+          <div className="flex items-center justify-between gap-3 px-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Connected Device</p>
+            <button
+              onClick={handleScan}
+              disabled={scanBusy}
+              className="rounded-full bg-primary/10 text-primary px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-40"
+            >
+              {scanBusy ? 'Scanning...' : 'Scan'}
+            </button>
+          </div>
           
           <div className="w-full flex items-center justify-between p-5 bg-white dark:bg-slate-800 border-2 border-primary rounded-2xl shadow-lg transition-all">
             <div className="flex items-center gap-4">
@@ -76,9 +111,54 @@ const DeviceScan: React.FC = () => {
               <div className="text-left">
                 <h3 className="font-black text-lg">ECP01 BLE Sensor</h3>
                 <p className="text-xs text-primary font-bold uppercase tracking-widest">{deviceStateLabel}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.16em] mt-1">
+                  {ble?.targetMac ?? '--'}
+                </p>
               </div>
             </div>
             <span className={`material-symbols-outlined text-3xl fill ${ble?.streaming ? 'text-emerald-500' : ble?.state === 'connected' ? 'text-primary' : 'text-gray-400'}`}>check_circle</span>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 px-1">Scanned Sensors</p>
+            {scannedDevices.length ? scannedDevices.map((device) => {
+              const isActive = device.address === (ble?.targetMac || selectedAddress);
+              return (
+                <button
+                  key={device.address}
+                  onClick={() => handleConnect(device.address)}
+                  disabled={busy}
+                  className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left ${
+                    isActive
+                      ? 'bg-primary/10 border-primary shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-800'
+                  } disabled:opacity-40`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`size-11 rounded-full flex items-center justify-center shrink-0 ${isActive ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500'}`}>
+                      <span className="material-symbols-outlined text-xl">bluetooth</span>
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-[#111418] dark:text-white">{device.name || 'Unknown Device'}</h3>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mt-1">{device.address}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
+                      RSSI {device.rssi ?? '--'}
+                    </p>
+                    <p className={`mt-1 text-[10px] font-black uppercase tracking-[0.16em] ${isActive ? 'text-primary' : 'text-gray-500'}`}>
+                      {busy && selectedAddress === device.address ? 'Connecting...' : isActive ? 'Selected' : 'Connect'}
+                    </p>
+                  </div>
+                </button>
+              );
+            }) : (
+              <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 px-4 py-6 text-center">
+                <p className="text-sm font-bold text-gray-500 dark:text-gray-400">No scanned BLE devices yet</p>
+                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">Tap scan to discover nearby sensors</p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

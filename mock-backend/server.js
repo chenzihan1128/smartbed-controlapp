@@ -11,6 +11,8 @@ import {
   shutdownSensorReader,
   startSensorStream,
   stopSensorStream,
+  scanBleDevices,
+  connectSensorDevice,
 } from "./services/sensorService.js";
 
 const app = express();
@@ -98,6 +100,7 @@ app.get("/api/status", (_, res) => {
   res.json({
     ble: {
       state: state.sensor.connected ? "connected" : "disconnected",
+      targetMac: state.sensor.targetMac,
       rssi: state.sensor.rssi,
       battery: state.sensor.battery,
       streaming: !!state.sensor.streaming,
@@ -105,6 +108,7 @@ app.get("/api/status", (_, res) => {
       lastPpg: state.sensor.lastPpg,
       lastWave: state.sensor.lastWave,
       analysis: state.sensor.analysis,
+      scannedDevices: state.sensor.scannedDevices,
       lastError: state.sensor.lastError,
     },
     stale: Date.now() - state.lastUpdate > 30000,
@@ -246,6 +250,24 @@ app.post("/api/sensor/stop", async (req, res) => {
   try {
     await stopSensorStream();
     res.json({ ok: true, ble: state.sensor });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/sensor/scan", async (req, res) => {
+  try {
+    const devices = await scanBleDevices();
+    res.json({ ok: true, devices });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/sensor/connect", async (req, res) => {
+  try {
+    const result = await connectSensorDevice(req.body?.address);
+    res.json({ ...result, ble: state.sensor });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

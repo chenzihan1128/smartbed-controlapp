@@ -56,6 +56,7 @@ const state = {
   
     sensor: {
       connected: true,
+      targetMac: process.env.BLE_DEVICE_MAC || "CA:55:15:38:F5:F7",
       rssi: -55,
       battery: 78,
       stale: false,
@@ -70,6 +71,7 @@ const state = {
         sys: null,
         dia: null,
       },
+      scannedDevices: [],
       lastError: null,
     },
   

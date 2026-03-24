@@ -3,6 +3,7 @@ export type BedAction = "start-up" | "start-down" | "stop" | "flat";
 export type BackendStatus = {
   ble: {
     state: "connected" | "disconnected";
+    targetMac?: string;
     rssi?: number;
     battery?: number;
     streaming?: boolean;
@@ -24,6 +25,11 @@ export type BackendStatus = {
       sys?: number | null;
       dia?: number | null;
     } | null;
+    scannedDevices?: Array<{
+      address: string;
+      name?: string;
+      rssi?: number | null;
+    }>;
     lastError?: string | null;
   };
   stale?: boolean;
@@ -66,6 +72,34 @@ export async function sensorAction(action: "start" | "stop") {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data?.error || `Sensor request failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+export async function scanSensors() {
+  const res = await fetch(apiUrl(`/api/sensor/scan`), {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Sensor scan failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+export async function connectSensor(address: string) {
+  const res = await fetch(apiUrl(`/api/sensor/connect`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Sensor connect failed (${res.status})`);
   }
 
   return await res.json();

@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const PYTHON = process.env.PYTHON_BIN || "python3";
 const SCRIPT_PATH = path.join(__dirname, "..", "device", "ble_reader.py");
+const SCAN_SCRIPT_PATH = path.join(__dirname, "..", "device", "ble_scan.py");
 
 let sensorProc = null;
 
@@ -82,6 +83,7 @@ export async function initSensorReader() {
 
   const env = {
     ...process.env,
+    BLE_DEVICE_MAC: state.sensor.targetMac || process.env.BLE_DEVICE_MAC,
   };
 
   const proc = spawn(PYTHON, [SCRIPT_PATH], {
@@ -122,6 +124,7 @@ export async function shutdownSensorReader() {
     }
     sensorProc.kill("SIGTERM");
   } catch {}
+  sensorProc = null;
 }
 
 export async function startSensorStream() {
@@ -139,4 +142,53 @@ export async function stopSensorStream() {
   }
   sensorProc.stdin.write("stop\n");
   state.sensor.streaming = false;
+}
+
+export async function scanBleDevices() {
+  return await new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [SCAN_SCRIPT_PATH], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || `BLE scan failed (${code})`));
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(stdout || "{}");
+        const devices = Array.isArray(payload.devices) ? payload.devices : [];
+        state.sensor.scannedDevices = devices;
+        resolve(devices);
+      } catch (err) {
+        reject(new Error(`BLE scan parse failed: ${err.message}`));
+      }
+    });
+  });
+}
+
+export async function connectSensorDevice(address) {
+  const nextMac = String(address || "").trim();
+  if (!nextMac) {
+    throw new Error("Sensor address required");
+  }
+
+  state.sensor.targetMac = nextMac;
+  await shutdownSensorReader();
+  await initSensorReader();
+  await startSensorStream();
+  return { ok: true, targetMac: state.sensor.targetMac };
 }
