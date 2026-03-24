@@ -59,6 +59,10 @@ const state = {
       rssi: -55,
       battery: 78,
       stale: false,
+      streaming: false,
+      lastPacketAt: null,
+      lastPpg: null,
+      lastError: null,
     },
   
     metrics: {

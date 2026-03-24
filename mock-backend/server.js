@@ -6,6 +6,7 @@ import state from "./services/state.js";
 import { initBedController, shutdownBedController } from "./services/bedService.js";
 import { sendAlertEmail, sendTestEmail } from "./services/emailService.js";
 import { metrics as generateMetrics } from "./services/metricsService.js";
+import { initSensorReader, shutdownSensorReader } from "./services/sensorService.js";
 
 const app = express();
 
@@ -94,6 +95,10 @@ app.get("/api/status", (_, res) => {
       state: state.sensor.connected ? "connected" : "disconnected",
       rssi: state.sensor.rssi,
       battery: state.sensor.battery,
+      streaming: !!state.sensor.streaming,
+      lastPacketAt: state.sensor.lastPacketAt,
+      lastPpg: state.sensor.lastPpg,
+      lastError: state.sensor.lastError,
     },
     stale: Date.now() - state.lastUpdate > 30000,
     lastUpdate: new Date(state.lastUpdate).toISOString(),
@@ -260,6 +265,13 @@ async function cleanupAndExit(code = 0) {
   }
 
   try {
+    console.log("Shutting down sensor reader...");
+    await shutdownSensorReader();
+  } catch (err) {
+    console.error("Error during shutdownSensorReader():", err);
+  }
+
+  try {
     server.close(() => {
       process.exit(code);
     });
@@ -294,6 +306,7 @@ function listenAsync(port) {
 async function start() {
   try {
     await initBedController();
+    await initSensorReader();
     await listenAsync(8000);
     console.log("Backend on http://localhost:8000");
   } catch (err) {
